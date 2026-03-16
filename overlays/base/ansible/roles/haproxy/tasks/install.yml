@@ -1,0 +1,23 @@
+---
+- name: Install dependencies of HAProxy
+  ansible.builtin.package:
+    name: "{{ haproxy_dependencies }}"
+    state: present
+    update_cache: true
+
+- name: Enable HAProxy PPA repository
+  ansible.builtin.apt_repository:
+    repo: "{{ haproxy_ppa_version }}"
+  when: haproxy_install_latest
+
+- name: Install HAProxy
+  ansible.builtin.package:
+    name: haproxy
+    state: present
+    update_cache: true
+
+- name: Ensure HAProxy service is enabled
+  ansible.builtin.service:
+    name: "{{ haproxy_name }}"
+    enabled: true
+    state: started

@@ -1,0 +1,15 @@
+---
+- name: Deploy Talos load balancer with HAProxy
+  hosts: haproxy
+  become: true
+
+  pre_tasks:
+    - name: Validate required HAProxy topology variables
+      ansible.builtin.assert:
+        that:
+          - haproxy_frontends | length > 0
+          - haproxy_backends | length > 0
+        fail_msg: "Define haproxy_frontends and haproxy_backends before running this playbook."
+
+  roles:
+    - role: haproxy

@@ -1,0 +1,9 @@
+# Environment-specific example overrides for the shared Talos Terraform module.
+# Prefer overlays/prod/scripts/vars.sh for active workflows.
+
+cluster_name            = "talos-prod"
+cluster_endpoint        = "172.17.20.90"
+control_plane_ips       = ["172.17.20.101", "172.17.20.102", "172.17.20.103"]
+worker_ips              = ["172.17.20.111", "172.17.20.112"]
+control_plane_config_path = "overlays/prod/talos/generated/controlplane.yaml"
+worker_config_path        = "overlays/prod/talos/generated/worker.yaml"

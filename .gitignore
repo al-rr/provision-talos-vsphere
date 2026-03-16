@@ -1,0 +1,11 @@
+.vagrant/
+.vscode/
+.env
+.env.old
+.terraform/
+overlays/base/packer/artifacts/
+overlays/base/packer/manifests/
+overlays/lab/talos/generated/
+overlays/prod/talos/generated/
+*.tfstate
+*.tfstate.backup

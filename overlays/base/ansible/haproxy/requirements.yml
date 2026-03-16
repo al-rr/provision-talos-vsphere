@@ -1,0 +1,9 @@
+---
+collections:
+  - name: fedora.linux_system_roles
+  - name: community.crypto
+    version: 2.26.2  
+
+roles:  
+  - name: nginxinc.nginx
+  - name: geerlingguy.nginx

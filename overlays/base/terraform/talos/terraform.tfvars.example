@@ -1,0 +1,33 @@
+vsphere_server               = "192.168.0.231"
+vsphere_user                 = "administrator@vsphere.local"
+vsphere_password             = "CHANGE_ME"
+vsphere_allow_unverified_ssl = true
+
+datacenter    = "ha-datacenter"
+cluster       = ""
+host          = "192.168.0.231"
+resource_pool = ""
+datastore     = "datastore1"
+network       = "VM Network"
+folder        = "/ha-datacenter/vm/talos-prod"
+
+cluster_name       = "talos-prod"
+cluster_endpoint   = "172.17.20.90"
+talos_template_name = "talos-vm-template"
+
+control_plane_count      = 3
+worker_count             = 2
+control_plane_cpu        = 2
+control_plane_memory_mb  = 4096
+control_plane_disk_gb    = 20
+worker_cpu               = 2
+worker_memory_mb         = 4096
+worker_disk_gb           = 40
+control_plane_ips        = ["172.17.20.101", "172.17.20.102", "172.17.20.103"]
+worker_ips               = ["172.17.20.111", "172.17.20.112"]
+talos_gateway            = "172.17.20.1"
+talos_netmask_prefix     = 24
+talos_nameservers        = ["172.17.20.10", "172.17.20.11"]
+talos_domain             = "infra.local"
+control_plane_config_path = "../generated/controlplane.yaml"
+worker_config_path        = "../generated/worker.yaml"

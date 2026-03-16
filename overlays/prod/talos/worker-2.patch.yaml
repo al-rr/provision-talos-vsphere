@@ -1,0 +1,18 @@
+machine:
+  network:
+    interfaces:
+      - interface: eth0
+        addresses:
+          - 172.17.20.112/24
+        routes:
+          - network: 0.0.0.0/0
+            gateway: 172.17.20.1
+        dhcp: false
+    nameservers:
+      - 172.17.20.10
+      - 172.17.20.11
+---
+apiVersion: v1alpha1
+kind: HostnameConfig
+hostname: talos-prod-worker-02
+auto: off

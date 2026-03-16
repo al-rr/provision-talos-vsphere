@@ -1,0 +1,14 @@
+machine:
+  network:
+    interfaces:
+      - interface: eth0 # Verify that this is your interface name (e.g., enp0s1, eth0)
+        addresses:
+          - 192.168.0.250/24 # Desired static IP in CIDR format
+        routes:
+          - network: 0.0.0.0/0
+            gateway: 192.168.0.2 # Your gateway IP
+        dhcp: false # Disables DHCP client
+    nameservers:
+      - 1.1.1.1
+      - 8.8.8.8
+

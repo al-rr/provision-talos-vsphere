@@ -1,0 +1,18 @@
+vrrp_vip: 172.17.20.90
+
+haproxy_stats_pass: changeme
+
+haproxy_frontends:
+  - name: talos_k8s_api
+    bind: "*:6443"
+    mode: tcp
+    default_backend: talos_k8s_api_backend
+
+haproxy_backends:
+  - name: talos_k8s_api_backend
+    mode: tcp
+    balance: roundrobin
+    servers:
+      - { name: cp01, ip: "172.17.20.101", port: 6443, options: "check" }
+      - { name: cp02, ip: "172.17.20.102", port: 6443, options: "check" }
+      - { name: cp03, ip: "172.17.20.103", port: 6443, options: "check" }

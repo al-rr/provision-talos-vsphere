@@ -1,0 +1,62 @@
+---
+# Legacy shared variables kept only as a reference for draft material.
+# Active workflows should prefer overlays/base/scripts/vars.sh and
+# overlays/<env>/scripts/vars.sh.
+
+vsphere_datastore_cluster: DatastoreCluster
+
+# vSphere settings
+vcenter_validate_certs: false
+vcenter_with_tags: true
+vsphere_datacenter: ALRR
+vsphere_cluster_name: Asgard
+vsphere_host: 192.168.0.231
+vsphere_datastore: DatastoreCluster
+vsphere_network: LAN
+vsphere_vm_folder: /ALRR/vm/
+vsphere_resource_pool:
+vsphere_set_host_for_datastore_uploads: false
+vsphere_api_timeout: 10
+vsphere_vm_network: LAN
+
+# Removable media settings
+vsphere_iso_datastore: datastore-sata-01
+vsphere_iso_content_library: ALRR Content Library
+vsphere_iso_content_library_enabled: false
+
+# Virtual machine settings
+vsphere_vm_version: 19
+vsphere_tools_upgrade_policy: true
+vsphere_remove_cdrom: true
+
+# Template and content library settings
+vsphere_template_conversion: false
+vsphere_content_library: ALRR Content Library
+vsphere_content_library_name: ALRR Content Library
+vsphere_content_library_enabled: true
+vsphere_content_library_ovf: true
+vsphere_content_library_destroy: true
+vsphere_content_library_skip_export: false
+
+# OVF export settings
+common_ovf_export_enabled: false
+common_ovf_export_overwrite: true
+
+# Boot and provisioning settings
+vsphere_data_source: http
+vsphere_http_ip: 192.168.0.20
+vsphere_http_port_min: 8000
+vsphere_http_port_max: 8099
+vsphere_ip_wait_timeout: 20m
+vsphere_ip_settle_timeout: 5s
+vsphere_shutdown_timeout: 15m
+
+# Proxy credentials
+vsphere_use_socks_proxy: false
+# vsphere_communicator_proxy_host:
+# vsphere_communicator_proxy_port:
+# vsphere_communicator_proxy_username:
+# vsphere_communicator_proxy_password:
+
+# Virtual machine hardware settings
+vm_firmware: efi
