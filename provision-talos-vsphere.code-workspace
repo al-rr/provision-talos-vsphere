@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../infra-gitops"
+		},
+		{
+			"path": "../vm-loadbalancer-proxy"
 		}
 	],
 	"settings": {}

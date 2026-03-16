@@ -5,12 +5,15 @@
 set -euo pipefail
 
 # -------- CONFIGURATION ----------
-ANSIBLE_USER="${ANSIBLE_USER:-$(whoami)}"
-ANSIBLE_HOME="/home/${ANSIBLE_USER}"
+ANSIBLE_USER="${ANSIBLE_USER:-vagrant}"
+ANSIBLE_HOME="$(getent passwd "${ANSIBLE_USER}" | cut -d: -f6 || true)"
+if [ -z "${ANSIBLE_HOME}" ]; then
+  ANSIBLE_HOME="/home/${ANSIBLE_USER}"
+fi
 VENV_PATH="${ANSIBLE_HOME}/ansible-venv"
 
 # Project directory
-ANSIBLE_PROJECT_PATH="${ANSIBLE_PROJECT_PATH:-$(cd "$(dirname "$0")/../ansible" && pwd)}"
+ANSIBLE_PROJECT_PATH="${ANSIBLE_PROJECT_PATH:-/home/vagrant/talos-vsphere-lab/overlays/base/ansible/haproxy}"
 
 # Requirements files
 GALAXY_REQUIREMENTS_FILE="${ANSIBLE_PROJECT_PATH}/requirements.yml"

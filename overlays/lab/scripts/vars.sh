@@ -11,3 +11,4 @@ export TALOS_CLUSTER_NAME="k8s-cluster-lab"
 export TALOS_CLUSTER_ENDPOINT="192.168.0.249"
 export TALOS_CONTROL_PLANE_CONFIG_PATH="overlays/lab/talos/k8s-cluster-lab/controlplane.yaml"
 export TALOS_WORKER_CONFIG_PATH="overlays/lab/talos/k8s-cluster-lab/worker.yaml"
+

@@ -14,19 +14,20 @@ export BASE_TALOS_TERRAFORM_DIR="overlays/base/terraform/talos"
 export BASE_HAPROXY_ANSIBLE_DIR="overlays/base/ansible/haproxy"
 export BASE_GOVC_DIR="overlays/base/govc"
 
-# vSphere
-export VSPHERE_ENDPOINT=""
-export VSPHERE_USERNAME=""
-export VSPHERE_PASSWORD=""
-export VSPHERE_INSECURE_CONNECTION="true"
+# vSphere Settings
 export VSPHERE_DATACENTER=""
 export VSPHERE_CLUSTER=""
-export VSPHERE_HOST=""
-export VSPHERE_DATASTORE=""
+export VSPHERE_HOST="192.168.0.233"
+export VSPHERE_DATASTORE="DATASTORE_02"
 export VSPHERE_NETWORK="VM Network"
 export VSPHERE_FOLDER=""
 export VSPHERE_RESOURCE_POOL=""
 export VSPHERE_SET_HOST_FOR_DATASTORE_UPLOADS="false"
+export VSPHERE_API_TIMEOUT="10"
+export VSPHERE_ENDPOINT="192.168.0.233"
+export VSPHERE_USERNAME=""
+export VSPHERE_PASSWORD=""
+export VSPHERE_INSECURE_CONNECTION="true"
 
 # Build account
 export BUILD_USERNAME=""

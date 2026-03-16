@@ -16,15 +16,30 @@
 set -euo pipefail
 
 # -------- Configurations ----------
-ANSIBLE_USER="${ANSIBLE_USER:-$(whoami)}"
-ANSIBLE_HOME=$(eval echo "~$ANSIBLE_USER")
-PYTHON_PKG="python3.13"
-PYTHON_BIN="/usr/bin/${PYTHON_PKG}"
+ANSIBLE_USER="${ANSIBLE_USER:-vagrant}"
+ANSIBLE_HOME="$(getent passwd "${ANSIBLE_USER}" | cut -d: -f6 || true)"
+if [ -z "${ANSIBLE_HOME}" ]; then
+  ANSIBLE_HOME="/home/${ANSIBLE_USER}"
+fi
+PYTHON_PKG="${PYTHON_PKG:-python3}"
+PYTHON_BIN="${PYTHON_BIN:-/usr/bin/python3}"
 VENV_PATH="${ANSIBLE_HOME}/ansible-venv"
 SSH_KEY_TYPE="ed25519"
-ANSIBLE_PROJECT_PATH="${ANSIBLE_PROJECT_PATH:-$(cd "$(dirname "$0")/../ansible" && pwd)}"
+ANSIBLE_PROJECT_PATH="${ANSIBLE_PROJECT_PATH:-/home/vagrant/talos-vsphere-lab/overlays/base/ansible/haproxy}"
 PYTHON_REQUIREMENTS_FILE="${ANSIBLE_PROJECT_PATH}/requirements.txt"
 SUDOERS_FILE="/etc/sudoers.d/${ANSIBLE_USER}"
+
+resolve_ansible_home() {
+  local resolved_home
+
+  resolved_home="$(getent passwd "${ANSIBLE_USER}" | cut -d: -f6 || true)"
+  if [ -z "${resolved_home}" ]; then
+    resolved_home="/home/${ANSIBLE_USER}"
+  fi
+
+  ANSIBLE_HOME="${resolved_home}"
+  VENV_PATH="${ANSIBLE_HOME}/ansible-venv"
+}
 
 create_user_ansible() {
   echo "[ansible-controller] ### Create user '${ANSIBLE_USER}' if missing"
@@ -42,6 +57,8 @@ create_user_ansible() {
   else
     echo "-> User '${ANSIBLE_USER}' already exists - nothing to do."
   fi
+
+  resolve_ansible_home
 
   create_ssh_key
   echo "User '${ANSIBLE_USER}' configured with sudo and SSH."
