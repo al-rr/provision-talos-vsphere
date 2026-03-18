@@ -73,12 +73,13 @@ machine:
         interfaces:
             - interface: eth0
               addresses:
-                - 192.168.0.238/24
+                - 192.168.0.88/24
               routes:
                 - network: 0.0.0.0/0
                   gateway: 192.168.0.2
               dhcp: false
         nameservers:
+            - 192.168.0.1
             - 1.1.1.1
             - 8.8.8.8
         
@@ -88,7 +89,7 @@ machine:
     # Used to provide instructions for installations.
     install:
         disk: /dev/sda # The disk used for installations.
-        image: ghcr.io/siderolabs/installer:v1.12.4 # Allows for supplying the image used to perform the installation.
+        image: factory.talos.dev/vmware-installer/903b2da78f99adef03cbbd4df6714563823f63218508800751560d3bc3557e40:v1.12.4 # Allows for supplying the image used to perform the installation.
         wipe: false # Indicates if the installation disk should be wiped at installation time.
         grubUseUKICmdline: true # Indicates if legacy GRUB bootloader should use kernel cmdline from the UKI instead of building it on the host.
         
@@ -106,8 +107,8 @@ machine:
             port: 7445 # KubePrism port.
         # Configures host DNS caching resolver.
         hostDNS:
-            enabled: true # Enable host DNS caching resolver.
-            forwardKubeDNSToHost: true # Use the host DNS resolver as upstream for Kubernetes CoreDNS pods.
+            enabled: false # Enable host DNS caching resolver.
+            forwardKubeDNSToHost: false # Use the host DNS resolver as upstream for Kubernetes CoreDNS pods.
         
         # # Configure Talos API access from Kubernetes pods.
         # kubernetesTalosAPIAccess:
@@ -235,7 +236,7 @@ cluster:
     secret: TD3YeHBp3auPldulPStTURDKdLzKnc5f1OdPnv7dGjI= # Shared secret of cluster (base64 encoded random 32 bytes).
     # Provides control plane specific configuration options.
     controlPlane:
-        endpoint: https://192.168.0.238:6443 # Endpoint is the canonical controlplane endpoint, which can be an IP address or a DNS hostname.
+        endpoint: https://192.168.0.250:6443 # Endpoint is the canonical controlplane endpoint, which can be an IP address or a DNS hostname.
     clusterName: k8s-cluster-lab # Configures the cluster's name.
     # Provides cluster specific network configuration options.
     network:

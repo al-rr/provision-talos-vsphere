@@ -4,7 +4,7 @@ machine:
     interfaces:
       - interface: eth0 # Verify that this is your interface name (e.g., enp0s1, eth0)
         addresses:
-          - 192.168.0.238/24 # Desired static IP in CIDR format
+          - 192.168.0.138/24 # Desired static IP in CIDR format
         routes:
           - network: 0.0.0.0/0
             gateway: 192.168.0.2 # Your gateway IP
@@ -14,15 +14,15 @@ machine:
     nameservers:
       - 1.1.1.1
       - 8.8.8.8
+  features:
+    hostDNS:
+      enabled: false
+      forwardKubeDNSToHost: false
     # interfaces:
     #   - interface: eth0
         # dhcp: true
         # vip:
         #   ip: 192.168.0.100
-  # features:
-  #   hostDNS:
-  #       enabled: false # Enable host DNS caching resolver.
-  #       forwardKubeDNSToHost: false # Use the host DNS resolver as upstream for Kubernetes CoreDNS pods.
       
 # cluster:
 #   network:
