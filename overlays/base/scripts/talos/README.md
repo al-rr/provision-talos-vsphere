@@ -93,3 +93,63 @@ Apply backend config to both HAProxy nodes:
 Optional:
 - `--cp-ips=192.168.0.88,192.168.0.89,192.168.0.90`
 - `--lb-hosts=172.17.20.181,172.17.20.182`
+
+## Post-Bootstrap Operations (Day-2)
+
+After bootstrap, normal operations are usually:
+- patching machine config (single node, many nodes, or all nodes),
+- then validating services/nodes,
+- and later doing controlled upgrades.
+
+Use this talosconfig:
+
+```bash
+TALOSCONFIG=overlays/lab/talos/k8s-cluster-lab/talosconfig
+```
+
+Apply a config patch on a single node:
+
+```bash
+talosctl --talosconfig "${TALOSCONFIG}" \
+  -n 192.168.0.91 \
+  patch machineconfig --patch '{"machine":{"time":{"disabled":true}}}'
+```
+
+Apply the same patch to multiple nodes:
+
+```bash
+talosctl --talosconfig "${TALOSCONFIG}" \
+  -n 192.168.0.91,192.168.0.92 \
+  patch machineconfig --patch '{"machine":{"time":{"disabled":true}}}'
+```
+
+Apply a full machine config file to one node:
+
+```bash
+talosctl --talosconfig "${TALOSCONFIG}" \
+  -n 192.168.0.91 \
+  apply-config --insecure --file overlays/lab/talos/k8s-cluster-lab/worker.yaml
+```
+
+Service and cluster checks:
+
+```bash
+talosctl --talosconfig "${TALOSCONFIG}" -n 192.168.0.91,192.168.0.92 service kubelet
+KUBECONFIG=/home/vagrant/.kube/config kubectl get nodes -o wide
+```
+
+### Upgrade Strategy
+
+Recommended order:
+1. workers first (one by one or small batches),
+2. then control-plane nodes one at a time.
+
+Example (single node):
+
+```bash
+talosctl --talosconfig "${TALOSCONFIG}" \
+  -n 192.168.0.91 \
+  upgrade --image factory.talos.dev/vmware-installer/903b2da78f99adef03cbbd4df6714563823f63218508800751560d3bc3557e40:v1.12.4
+```
+
+Then wait for `Ready` before moving to the next node.
