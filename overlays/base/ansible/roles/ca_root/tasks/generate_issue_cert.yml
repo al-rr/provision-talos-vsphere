@@ -1,0 +1,83 @@
+---
+
+- name: Ensure SSL Directories exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ issue_cert_path }}"
+    - "{{ issue_key_path }}"    
+
+- name: Force Recreate Certificates
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ issue_cert_key }}"
+    - "{{ issue_cert_csr }}"
+    - "{{ issue_cert_crt }}"
+  when: issue_cert_force_recreate | bool
+
+- name: Check if Self-Signed Certificate exists
+  ansible.builtin.stat:
+    path: "{{ issue_cert_crt }}"
+  register: cert_crt_stat
+
+
+- name: Generate Private Key (Key)
+  community.crypto.openssl_privatekey:
+    path: "{{ issue_cert_key }}"
+    size: 2048
+    type: RSA
+  when: not cert_crt_stat.stat.exists
+
+- name: Generate Certificate Signing Request (CSR)
+  community.crypto.openssl_csr:
+    path: "{{ issue_cert_csr }}"
+    privatekey_path: "{{ issue_cert_key }}"
+    country_name: "{{ issue_cert_country }}"
+    locality_name: "{{ issue_cert_locality_name }}"
+    organization_name: "{{ issue_cert_organization_name }}"
+    organizational_unit_name: "{{ issue_cert_organizational_unit_name }}"
+    email_address: "{{ issue_cert_email }}"
+    common_name: "{{ issue_cert_common_name }}"
+    subject_alt_name: "{{ issue_cert_sans }}"
+  when: not cert_crt_stat.stat.exists
+  # register: cert_csr_stat
+
+- name: Fetch CSR to Control Node
+  ansible.builtin.fetch:
+    src: "{{ issue_cert_csr }}"
+    dest: "/tmp/{{ issue_cert_name }}.csr"
+    flat: true
+  become: false
+  # when: cert_csr_stat.stat.exists
+  
+
+- name: Sign certificate using Root CA from Control Node
+  delegate_to: localhost
+  community.crypto.x509_certificate:
+    path: "/tmp/{{ issue_cert_name }}.crt"
+    csr_path: "/tmp/{{ issue_cert_name }}.csr"
+    provider: ownca
+    ownca_path: "{{ ca_root_crt }}"
+    ownca_privatekey_path: "{{ ca_root_key }}"
+    ownca_not_after: "+825d"
+  # become: false
+
+- name: Push Signed Certificate
+  ansible.builtin.copy:
+    src: "/tmp/{{ issue_cert_name }}.crt"
+    dest: "{{ issue_cert_crt }}"
+    mode: "0644"
+
+- name: Clean up local CSR and certificate files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/{{ issue_cert_name }}.csr"
+    - "/tmp/{{ issue_cert_name }}.crt"
+  delegate_to: localhost

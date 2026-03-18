@@ -1,0 +1,32 @@
+---
+- name: Validate Keepalived Configuration File
+  become: true
+  block:
+    - name: Check keepalived config syntax (systemctl try-reload-or-restart)
+      command: "keepalived -t -f {{ keepalived_conf_path }}"
+      register: keepalived_syntax
+      changed_when: false
+      failed_when: keepalived_syntax.rc != 0
+      when: keepalived_check_syntax | bool
+
+    - name: Debug keepalived syntax output
+      debug:
+        var: keepalived_syntax.stdout_lines
+      when: keepalived_check_syntax | bool
+
+  rescue:
+    - name: Fail if keepalived config invalid
+      fail:
+        msg: "keepalived configuration test failed. Not restarting service."
+
+- name: Restart Keepalived
+  service:
+    name: keepalived
+    state: restarted
+
+- name: Reload Keepalived
+  become: true
+  ansible.builtin.service:
+    name: keepalived
+    state: reloaded
+    daemon_reload: true

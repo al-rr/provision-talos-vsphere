@@ -1,0 +1,61 @@
+---
+- name: Create Keepalived Configuration File
+  ansible.builtin.template:
+    src: keepalived.conf.j2
+    dest: "{{ keepalived_conf_path }}"
+    owner: "{{ keepalived_conf_owner }}"
+    group: "{{ keepalived_conf_group }}"
+    mode: "{{ keepalived_conf_mode }}"
+  notify:
+    - Validate Keepalived Configuration File
+    - Reload Keepalived
+
+- name: Configure UFW to allow VRRP multicast/proto (optional)
+  when: keepalived_manage_ufw | bool
+  block:
+    - name: Ensure ufw is installed
+      apt:
+        name: ufw
+        state: present
+        update_cache: false
+
+#     - name: Allow VRRP protocol (112) from allowed peers (if defined)
+#       ufw:
+#         rule: allow
+#         proto: vrrp
+#         from_ip: "{{ item }}"
+#       loop: "{{ keepalived_allowed_peers }}"
+#       when: keepalived_allowed_peers | length > 0
+
+#     - name: Allow VRRP protocol (112) from anywhere (if no peers restricted)
+#       ufw:
+#         rule: allow
+#         proto: vrrp
+#       when: keepalived_allowed_peers | length == 0
+
+#     - name: Allow VRRP multicast (224.0.0.18) via raw iptables for extra compatibility
+#       ansible.builtin.iptables:
+#         chain: INPUT
+#         protocol: vrrp
+#         source: "{{ item | default('0.0.0.0/0') }}"
+#         jump: ACCEPT
+#       loop: "{{ keepalived_allowed_peers if keepalived_allowed_peers|length>0 else [omit] }}"
+#       when: false   # left false because ufw already handles; enable if you prefer iptables tasks
+
+# - name: Ensure track script directory exists
+#   file:
+#     path: /usr/local/bin
+#     state: directory
+#     owner: root
+#     group: root
+#     mode: '0755'
+
+# - name: Deploy track scripts (if any)
+#   copy:
+#     dest: "/usr/local/bin/{{ item.name }}"
+#     content: "{{ item.script_content | default(item.script) }}"
+#     owner: root
+#     group: root
+#     mode: '0755'
+#   loop: "{{ keepalived_track_scripts | default([]) }}"
+#   when: keepalived_track_scripts | length > 0

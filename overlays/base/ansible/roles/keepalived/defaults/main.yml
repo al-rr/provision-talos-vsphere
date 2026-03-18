@@ -1,0 +1,33 @@
+---
+# keepalived defaults (Ubuntu)
+keepalived_vr_id: 51              # Virtual Router ID (1-255)
+keepalived_advert_int: 2          # intervalo de anúncio em segundos
+# Autenticação VRRP (opcional). Se auth_type == "PASS" então auth_pass obrigatório.
+keepalived_auth_type: PASS        # PASS | AH | none
+keepalived_auth_pass: "changeme" # senha VRRP (mín 8 chars recomendado)
+
+# Lista de VIPs (suporta múltiplos)
+# Cada item: { address: "10.0.0.100/32", dev: optional_device }
+keepalived_vips:
+  - address: "10.0.0.100/32"
+
+# Scripts de track (opcional) — exemplo de uso: track_script: [ { name: 'chk_haproxy', script: '/usr/local/bin/chk_haproxy.sh' } ]
+keepalived_track_scripts: []
+keepalived_check_haproxy: false
+# Proteção de arquivo de configuração
+keepalived_conf_path: /etc/keepalived/keepalived.conf
+keepalived_conf_owner: root
+keepalived_conf_group: root
+keepalived_conf_mode: '0600'
+
+# Firewall: opções para gerenciamento via UFW (Ubuntu)
+keepalived_manage_ufw: true
+# se true, irá permitir tráfego VRRP multicast (224.0.0.18) e protocolo VRRP (proto 112) entre nós
+# defina keepalived_allowed_peers com lista de IPs/máscaras dos peers se quiser restringir
+keepalived_allowed_peers: []  # ex: ["10.0.0.0/24", "192.168.1.10"]
+
+# Check de sintaxe antes de reiniciar (por padrão true)
+keepalived_check_syntax: true
+
+# Serviço name (varia pouco entre distros)
+keepalived_service_name: keepalived

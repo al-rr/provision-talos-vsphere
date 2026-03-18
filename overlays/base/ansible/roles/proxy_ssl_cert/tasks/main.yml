@@ -1,0 +1,60 @@
+---
+# Gera o certificado localmente e distribui para os hosts nginx-proxy
+
+- name: Ensure certificate directory exists on controller
+  delegate_to: localhost
+  run_once: true
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/certs"
+    state: directory
+    mode: '0755'
+
+- name: Generate Private Key (controller only)
+  delegate_to: localhost
+  run_once: true
+  community.crypto.openssl_privatekey:
+    path: "{{ playbook_dir }}/certs/{{ ssl_cert_name }}.key"
+    size: 2048
+    type: RSA
+
+- name: Generate CSR (controller only)
+  delegate_to: localhost
+  run_once: true
+  community.crypto.openssl_csr:
+    path: "{{ playbook_dir }}/certs/{{ ssl_cert_name }}.csr"
+    privatekey_path: "{{ playbook_dir }}/certs/{{ ssl_cert_name }}.key"
+    country_name: BR
+    organization_name: Assembleia Legislativa do Estado de Roraima
+    email_address: ginfra@al.rr.leg.br
+    common_name: "{{ ssl_common_name }}"
+    subject_alt_name: "{{ ssl_sans }}"
+
+- name: Generate Self-Signed Certificate (controller only)
+  delegate_to: localhost
+  run_once: true
+  community.crypto.x509_certificate:
+    path: "{{ playbook_dir }}/certs/{{ ssl_cert_name }}.crt"
+    privatekey_path: "{{ playbook_dir }}/certs/{{ ssl_cert_name }}.key"
+    csr_path: "{{ playbook_dir }}/certs/{{ ssl_cert_name }}.csr"
+    provider: selfsigned
+
+- name: Ensure SSL directories on remote host
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ ssl_cert_path }}"
+    - "{{ ssl_key_path }}"
+
+- name: Copy certificate to remote hosts
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/certs/{{ ssl_cert_name }}.crt"
+    dest: "{{ ssl_cert_path }}/{{ ssl_cert_name }}.crt"
+    mode: '0644'
+
+- name: Copy private key to remote hosts
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/certs/{{ ssl_cert_name }}.key"
+    dest: "{{ ssl_key_path }}/{{ ssl_cert_name }}.key"
+    mode: '0600'

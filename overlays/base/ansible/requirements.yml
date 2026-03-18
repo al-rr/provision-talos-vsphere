@@ -1,0 +1,9 @@
+---
+collections:
+  - name: ansible.posix
+  - name: community.general
+roles:
+  - name: haproxy
+    src: ../../../../infra-gitops.git
+    scm: git
+    version: main

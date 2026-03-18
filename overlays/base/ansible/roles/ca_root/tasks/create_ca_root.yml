@@ -1,0 +1,45 @@
+---
+
+- name: Ensure directory exists for local self-signed TLS certs.
+  delegate_to: localhost
+  run_once: true
+  become: true
+  file:
+    path: "{{ ca_root_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Generate CA Private Key
+  delegate_to: localhost
+  run_once: true
+  become: true
+  community.crypto.openssl_privatekey:
+    path: "{{ ca_root_key }}"    
+    force: "{{ ca_root_force_recreate }}"  
+
+- name: Generate Certificate Signing Request (CSR)
+  delegate_to: localhost
+  run_once: true
+  become: true
+  community.crypto.openssl_csr:
+    path: "{{ ca_root_csr }}"
+    privatekey_path: "{{ ca_root_key }}"
+    country_name: "{{ ca_country }}"
+    locality_name: "{{ ca_locality }}"
+    state_or_province_name: "{{ ca_state }}"
+    organization_name: "{{ ca_org }}"
+    organizational_unit_name: "{{ ca_ou }}"
+    email_address: "{{ ca_email }}"    
+    common_name: "{{ ca_common_name }}"
+    force: "{{ ca_root_force_recreate }}"
+
+- name: Generate CA Self-Signed Certificate
+  delegate_to: localhost
+  run_once: true
+  become: true
+  community.crypto.x509_certificate:
+    path: "{{ ca_root_crt }}"
+    csr_path: "{{ ca_root_csr }}"
+    privatekey_path: "{{ ca_root_key }}"
+    provider: selfsigned    
+    force: "{{ ca_root_force_recreate }}"
