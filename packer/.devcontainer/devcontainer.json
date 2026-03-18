@@ -1,0 +1,37 @@
+// Packer Oracle
+{
+  "name": "Packer Provisionamento",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "..",
+    "args": {
+      "PACKER_HOST": "${localEnv:PACKER_HOST}",
+      "PACKER_KS_PORT": "${localEnv:PACKER_KS_PORT}"
+    }
+  },
+  "forwardPorts": [
+    8017
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "szTheory.vscode-packer-powertools",
+        "hashicorp.packer",
+        "hashicorp.hcl"
+      ]
+    }
+  },
+  "remoteUser": "root",
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached"
+  ]
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash"
+  },
+  "runArgs": [
+    "--env-file",
+    ".devcontainer/devcontainer.env",
+    "-p",
+    "8017:8017"
+  ]
+}

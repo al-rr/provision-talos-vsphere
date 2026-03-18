@@ -1,0 +1,28 @@
+services:
+  packer:
+    image: hashicorp/packer:latest
+    container_name: packer
+    volumes:
+      - ./:/workspace
+    working_dir: /workspace
+    environment:
+      - PACKER_PLUGIN_PATH=/workspace/.packer.d/plugins
+
+  vault:
+    image: hashicorp/vault
+    container_name: vault
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "8200:8200"  # Mapeia a porta do Vault para a máquina host
+    volumes:
+      - vault_data:/vault/file  # Persistência de dados
+      - vault_logs:/vault/logs  # Persistência de logs
+      - ./config:/vault/config  # Diretório de configuração
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_ID=myroot  # Token de root
+      - VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200  # Endereço de escuta
+
+volumes:
+  vault_data:
+  vault_logs:
