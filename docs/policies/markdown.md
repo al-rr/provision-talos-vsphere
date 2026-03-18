@@ -8,6 +8,7 @@
 - Use one `#` heading per document.
 - Keep headings short and descriptive.
 - Prefer flat bullet lists over deeply nested lists.
+- Use tables since as possible with item and value
 - Use fenced code blocks with a language hint when practical.
 - Use repository-relative paths exactly as they exist in the tree.
 - Keep commands copyable and aligned with the active path structure.
