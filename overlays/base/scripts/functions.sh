@@ -141,6 +141,7 @@ normalize_global_env() {
   export TALOS_CLUSTER_NAME="$(env_first TALOS_CLUSTER_NAME talos_cluster_name)"
   export TALOS_CLUSTER_ENDPOINT="$(env_first TALOS_CLUSTER_ENDPOINT talos_cluster_endpoint)"
   export TALOS_TEMPLATE_NAME="$(env_first TALOS_TEMPLATE_NAME talos_template_name)"
+  export TALOS_OVA_PATH="$(env_first TALOS_OVA_PATH talos_ova_path)"
   export TALOS_OVF_URL="$(env_first TALOS_OVF_URL talos_ovf_url)"
   export TALOS_CONTROL_PLANE_COUNT="$(env_first TALOS_CONTROL_PLANE_COUNT talos_control_plane_count)"
   export TALOS_WORKER_COUNT="$(env_first TALOS_WORKER_COUNT talos_worker_count)"

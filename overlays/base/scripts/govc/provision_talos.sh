@@ -1,0 +1,608 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# @file provision_talos.sh
+# @brief Provision Talos control-plane/worker VMs on vSphere/ESXi using govc.
+# @description
+#   Creates or destroys Talos nodes from overlay variables, injects machine configs
+#   via guestinfo, and either imports a Talos OVA or mounts a Talos ISO for initial boot/install.
+#
+# @arg action string Required action: create, destroy, or plan.
+# @arg --env,-e string Overlay environment (default: lab).
+# @arg --cluster-name string Talos cluster name prefix.
+# @arg --cp-count int Control-plane VM count.
+# @arg --worker-count int Worker VM count.
+# @arg --cp-cpu int Control-plane vCPUs.
+# @arg --cp-memory-mb int Control-plane memory (MiB).
+# @arg --cp-disk-gb int Control-plane disk size (GiB).
+# @arg --worker-cpu int Worker vCPUs.
+# @arg --worker-memory-mb int Worker memory (MiB).
+# @arg --worker-disk-gb int Worker disk size (GiB).
+# @arg --cp-config string Control-plane machine config file.
+# @arg --worker-config string Worker machine config file.
+# @arg --iso-path string Datastore-relative Talos ISO path.
+# @arg --ova-path string Local path or URL to Talos OVA.
+# @arg --network string VM network/portgroup name.
+# @arg --datastore string Datastore name.
+# @arg --folder string Optional VM folder.
+# @arg --resource-pool string Optional resource pool.
+# @flag --overwrite Recreate VM if it already exists.
+# @flag --power-on Power on after create (default true).
+# @flag --no-power-on Do not power on after create.
+# @flag --help,-h Show usage.
+
+ENV_NAME="lab"
+ACTION=""
+CLUSTER_NAME=""
+CP_COUNT=""
+WORKER_COUNT=""
+CP_CPU=""
+CP_MEMORY_MB=""
+CP_DISK_GB=""
+WORKER_CPU=""
+WORKER_MEMORY_MB=""
+WORKER_DISK_GB=""
+CP_CONFIG_PATH=""
+WORKER_CONFIG_PATH=""
+ISO_DATASTORE_PATH=""
+OVA_PATH=""
+VM_NETWORK=""
+VM_DATASTORE=""
+VM_FOLDER=""
+VM_RESOURCE_POOL=""
+VM_OVERWRITE=""
+VM_POWER_ON=""
+WAIT_BOOTSTRAP_IPS=""
+WAIT_BOOTSTRAP_TIMEOUT=""
+WAIT_TALOS_API=""
+WAIT_TALOS_API_TIMEOUT=""
+VM_FIRMWARE="efi"
+VM_GUEST_OS_TYPE="other3xLinux64Guest"
+VM_NET_ADAPTER="vmxnet3"
+VM_DISK_CONTROLLER="scsi"
+declare -a ALL_PATCH_FILES=()
+declare -a CP_PATCH_FILES=()
+declare -a WORKER_PATCH_FILES=()
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/overlays/base/scripts/functions.sh"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options] <create|destroy|plan>
+
+Options:
+  -e, --env=<env>                Overlay environment (default: lab)
+      --cluster-name=<name>      Cluster name (default: TALOS_CLUSTER_NAME)
+      --cp-count=<n>             Control-plane count (default: TALOS_CONTROL_PLANE_COUNT)
+      --worker-count=<n>         Worker count (default: TALOS_WORKER_COUNT)
+      --cp-cpu=<n>               Control-plane vCPU count
+      --cp-memory-mb=<n>         Control-plane memory MiB
+      --cp-disk-gb=<n>           Control-plane disk GiB
+      --worker-cpu=<n>           Worker vCPU count
+      --worker-memory-mb=<n>     Worker memory MiB
+      --worker-disk-gb=<n>       Worker disk GiB
+      --cp-config=<path>         Control-plane machine config file
+      --worker-config=<path>     Worker machine config file
+      --iso-path=<path>          Datastore-relative Talos ISO path
+      --ova-path=<path|url>      Talos OVA path/URL (preferred in ESXi lab)
+      --network=<name>           VM network/portgroup
+      --datastore=<name>         Datastore
+      --folder=<path>            VM folder
+      --resource-pool=<path>     Resource pool
+      --overwrite                Recreate VM if it exists
+      --power-on                 Power on after create (default)
+      --no-power-on              Do not power on after create
+      --wait-bootstrap-ips       Wait for bootstrap DHCP IPs after create (default)
+      --no-wait-bootstrap-ips    Skip waiting for bootstrap DHCP IPs
+      --wait-bootstrap-timeout=<sec> Timeout waiting for bootstrap DHCP IPs (default: 600)
+      --wait-talos-api           Wait until Talos API (:50000) is reachable on all nodes (default)
+      --no-wait-talos-api        Skip Talos API readiness check
+      --wait-talos-api-timeout=<sec> Timeout waiting Talos API readiness (default: 300)
+      --all-patch=<path>         Machineconfig patch for all nodes (repeatable)
+      --cp-patch=<path>          Machineconfig patch for control-plane nodes (repeatable)
+      --worker-patch=<path>      Machineconfig patch for worker nodes (repeatable)
+  -h, --help                     Show this help
+EOF
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -e|--env)
+        [[ $# -ge 2 ]] || die "Missing value for $1"
+        ENV_NAME="$2"
+        shift 2
+        ;;
+      --env=*) ENV_NAME="${1#*=}"; shift ;;
+      --cluster-name=*) CLUSTER_NAME="${1#*=}"; shift ;;
+      --cp-count=*) CP_COUNT="${1#*=}"; shift ;;
+      --worker-count=*) WORKER_COUNT="${1#*=}"; shift ;;
+      --cp-cpu=*) CP_CPU="${1#*=}"; shift ;;
+      --cp-memory-mb=*) CP_MEMORY_MB="${1#*=}"; shift ;;
+      --cp-disk-gb=*) CP_DISK_GB="${1#*=}"; shift ;;
+      --worker-cpu=*) WORKER_CPU="${1#*=}"; shift ;;
+      --worker-memory-mb=*) WORKER_MEMORY_MB="${1#*=}"; shift ;;
+      --worker-disk-gb=*) WORKER_DISK_GB="${1#*=}"; shift ;;
+      --cp-config=*) CP_CONFIG_PATH="${1#*=}"; shift ;;
+      --worker-config=*) WORKER_CONFIG_PATH="${1#*=}"; shift ;;
+      --iso-path=*) ISO_DATASTORE_PATH="${1#*=}"; shift ;;
+      --ova-path=*) OVA_PATH="${1#*=}"; shift ;;
+      --network=*) VM_NETWORK="${1#*=}"; shift ;;
+      --datastore=*) VM_DATASTORE="${1#*=}"; shift ;;
+      --folder=*) VM_FOLDER="${1#*=}"; shift ;;
+      --resource-pool=*) VM_RESOURCE_POOL="${1#*=}"; shift ;;
+      --overwrite) VM_OVERWRITE="true"; shift ;;
+      --power-on) VM_POWER_ON="true"; shift ;;
+      --no-power-on) VM_POWER_ON="false"; shift ;;
+      --wait-bootstrap-ips) WAIT_BOOTSTRAP_IPS="true"; shift ;;
+      --no-wait-bootstrap-ips) WAIT_BOOTSTRAP_IPS="false"; shift ;;
+      --wait-bootstrap-timeout=*) WAIT_BOOTSTRAP_TIMEOUT="${1#*=}"; shift ;;
+      --wait-talos-api) WAIT_TALOS_API="true"; shift ;;
+      --no-wait-talos-api) WAIT_TALOS_API="false"; shift ;;
+      --wait-talos-api-timeout=*) WAIT_TALOS_API_TIMEOUT="${1#*=}"; shift ;;
+      --all-patch=*) ALL_PATCH_FILES+=("${1#*=}"); shift ;;
+      --cp-patch=*) CP_PATCH_FILES+=("${1#*=}"); shift ;;
+      --worker-patch=*) WORKER_PATCH_FILES+=("${1#*=}"); shift ;;
+      create|destroy|plan) ACTION="$1"; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) usage; die "Unknown argument: $1" ;;
+    esac
+  done
+}
+
+resolve_path_from_repo() {
+  local path_value="$1"
+  if [[ "${path_value}" = /* ]]; then
+    printf '%s\n' "${path_value}"
+  else
+    printf '%s\n' "${REPO_ROOT}/${path_value}"
+  fi
+}
+
+resolve_patch_files() {
+  local i
+  for i in "${!ALL_PATCH_FILES[@]}"; do
+    ALL_PATCH_FILES[$i]="$(resolve_path_from_repo "${ALL_PATCH_FILES[$i]}")"
+  done
+  for i in "${!CP_PATCH_FILES[@]}"; do
+    CP_PATCH_FILES[$i]="$(resolve_path_from_repo "${CP_PATCH_FILES[$i]}")"
+  done
+  for i in "${!WORKER_PATCH_FILES[@]}"; do
+    WORKER_PATCH_FILES[$i]="$(resolve_path_from_repo "${WORKER_PATCH_FILES[$i]}")"
+  done
+}
+
+load_context() {
+  load_overlay_vars "${ENV_NAME}"
+  export_common_tool_env
+
+  CLUSTER_NAME="${CLUSTER_NAME:-${TALOS_CLUSTER_NAME:-talos}}"
+  CP_COUNT="${CP_COUNT:-${TALOS_CONTROL_PLANE_COUNT:-3}}"
+  WORKER_COUNT="${WORKER_COUNT:-${TALOS_WORKER_COUNT:-2}}"
+  CP_CPU="${CP_CPU:-${TALOS_CONTROL_PLANE_CPU:-2}}"
+  CP_MEMORY_MB="${CP_MEMORY_MB:-${TALOS_CONTROL_PLANE_MEMORY_MB:-4096}}"
+  CP_DISK_GB="${CP_DISK_GB:-${TALOS_CONTROL_PLANE_DISK_GB:-20}}"
+  WORKER_CPU="${WORKER_CPU:-${TALOS_WORKER_CPU:-2}}"
+  WORKER_MEMORY_MB="${WORKER_MEMORY_MB:-${TALOS_WORKER_MEMORY_MB:-4096}}"
+  WORKER_DISK_GB="${WORKER_DISK_GB:-${TALOS_WORKER_DISK_GB:-40}}"
+  CP_CONFIG_PATH="${CP_CONFIG_PATH:-${TALOS_CONTROL_PLANE_CONFIG_PATH:-}}"
+  WORKER_CONFIG_PATH="${WORKER_CONFIG_PATH:-${TALOS_WORKER_CONFIG_PATH:-}}"
+  ISO_DATASTORE_PATH="${ISO_DATASTORE_PATH:-${TALOS_ISO_DATASTORE_PATH:-ISOs/talos-v1.12.4-uefi.iso}}"
+  OVA_PATH="${OVA_PATH:-${TALOS_OVA_PATH:-}}"
+  VM_NETWORK="${VM_NETWORK:-${GOVC_NETWORK:-${VSPHERE_NETWORK:-}}}"
+  VM_DATASTORE="${VM_DATASTORE:-${GOVC_DATASTORE:-${VSPHERE_DATASTORE:-}}}"
+  VM_FOLDER="${VM_FOLDER:-${GOVC_FOLDER:-${VSPHERE_FOLDER:-}}}"
+  VM_RESOURCE_POOL="${VM_RESOURCE_POOL:-${VSPHERE_RESOURCE_POOL:-}}"
+  VM_OVERWRITE="${VM_OVERWRITE:-${GOVC_VM_OVERWRITE:-false}}"
+  VM_POWER_ON="${VM_POWER_ON:-${GOVC_VM_POWER_ON:-true}}"
+  WAIT_BOOTSTRAP_IPS="${WAIT_BOOTSTRAP_IPS:-true}"
+  WAIT_BOOTSTRAP_TIMEOUT="${WAIT_BOOTSTRAP_TIMEOUT:-600}"
+  WAIT_TALOS_API="${WAIT_TALOS_API:-true}"
+  WAIT_TALOS_API_TIMEOUT="${WAIT_TALOS_API_TIMEOUT:-300}"
+
+  CP_CONFIG_PATH="$(resolve_path_from_repo "${CP_CONFIG_PATH}")"
+  WORKER_CONFIG_PATH="$(resolve_path_from_repo "${WORKER_CONFIG_PATH}")"
+  if [[ -n "${OVA_PATH}" && "${OVA_PATH}" != /* && "${OVA_PATH}" != http://* && "${OVA_PATH}" != https://* ]]; then
+    OVA_PATH="$(resolve_path_from_repo "${OVA_PATH}")"
+  fi
+  resolve_patch_files
+}
+
+validate_inputs() {
+  [[ -n "${ACTION}" ]] || die "Action is required: create, destroy, or plan."
+  [[ "${CP_COUNT}" =~ ^[0-9]+$ ]] || die "--cp-count must be numeric."
+  [[ "${WORKER_COUNT}" =~ ^[0-9]+$ ]] || die "--worker-count must be numeric."
+  [[ "${CP_CPU}" =~ ^[0-9]+$ ]] || die "--cp-cpu must be numeric."
+  [[ "${CP_MEMORY_MB}" =~ ^[0-9]+$ ]] || die "--cp-memory-mb must be numeric."
+  [[ "${CP_DISK_GB}" =~ ^[0-9]+$ ]] || die "--cp-disk-gb must be numeric."
+  [[ "${WORKER_CPU}" =~ ^[0-9]+$ ]] || die "--worker-cpu must be numeric."
+  [[ "${WORKER_MEMORY_MB}" =~ ^[0-9]+$ ]] || die "--worker-memory-mb must be numeric."
+  [[ "${WORKER_DISK_GB}" =~ ^[0-9]+$ ]] || die "--worker-disk-gb must be numeric."
+  [[ -n "${VM_DATASTORE}" ]] || die "Datastore is required."
+  [[ -n "${VM_NETWORK}" ]] || die "Network is required."
+  if [[ -z "${OVA_PATH}" ]]; then
+    [[ -n "${ISO_DATASTORE_PATH}" ]] || die "Talos ISO datastore path is required when OVA is not set."
+  elif [[ "${OVA_PATH}" != http://* && "${OVA_PATH}" != https://* ]]; then
+    [[ -f "${OVA_PATH}" ]] || die "Talos OVA not found: ${OVA_PATH}"
+  fi
+  [[ -n "${GOVC_URL:-}" ]] || die "GOVC_URL is empty."
+  [[ -n "${GOVC_USERNAME:-}" ]] || die "GOVC_USERNAME is empty."
+  [[ -n "${GOVC_PASSWORD:-}" ]] || die "GOVC_PASSWORD is empty."
+  [[ "${WAIT_BOOTSTRAP_TIMEOUT}" =~ ^[0-9]+$ ]] || die "--wait-bootstrap-timeout must be numeric."
+  [[ "${WAIT_TALOS_API_TIMEOUT}" =~ ^[0-9]+$ ]] || die "--wait-talos-api-timeout must be numeric."
+  if (( ${#ALL_PATCH_FILES[@]} > 0 || ${#CP_PATCH_FILES[@]} > 0 || ${#WORKER_PATCH_FILES[@]} > 0 )); then
+    command -v talosctl >/dev/null 2>&1 || die "talosctl is required when patches are provided."
+  fi
+
+  if [[ "${ACTION}" == "create" ]]; then
+    local patch_file=""
+    [[ -f "${CP_CONFIG_PATH}" ]] || die "Control-plane machine config not found: ${CP_CONFIG_PATH}"
+    [[ -f "${WORKER_CONFIG_PATH}" ]] || die "Worker machine config not found: ${WORKER_CONFIG_PATH}"
+    grep -q 'factory.talos.dev/vmware-installer/' "${CP_CONFIG_PATH}" || \
+      die "Control-plane config should use Talos Factory vmware-installer image for production-ready flow."
+    grep -q 'factory.talos.dev/vmware-installer/' "${WORKER_CONFIG_PATH}" || \
+      die "Worker config should use Talos Factory vmware-installer image for production-ready flow."
+    grep -q 'https://'"${HAPROXY_VIP:-}"':6443' "${CP_CONFIG_PATH}" || \
+      log_warn "Control-plane endpoint does not seem to point to HAProxy VIP (${HAPROXY_VIP:-unset})."
+    for patch_file in "${ALL_PATCH_FILES[@]}" "${CP_PATCH_FILES[@]}" "${WORKER_PATCH_FILES[@]}"; do
+      [[ -z "${patch_file}" ]] && continue
+      [[ -f "${patch_file}" ]] || die "Patch file not found: ${patch_file}"
+    done
+  fi
+}
+
+vm_exists() {
+  local vm_name="$1"
+  govc find / -type m -name "${vm_name}" | grep -qx ".*/${vm_name}"
+}
+
+vm_name_for_role() {
+  local role="$1"
+  local index="$2"
+  printf '%s-%s-%d\n' "${CLUSTER_NAME}" "${role}" "${index}"
+}
+
+config_for_index() {
+  local base_config="$1"
+  local index="$2"
+  local indexed=""
+
+  indexed="${base_config%.*}-${index}.${base_config##*.}"
+  if [[ -f "${indexed}" ]]; then
+    printf '%s\n' "${indexed}"
+  else
+    printf '%s\n' "${base_config}"
+  fi
+}
+
+encode_config_base64() {
+  local cfg="$1"
+  base64 -w 0 "${cfg}"
+}
+
+patched_config_file() {
+  local src_cfg="$1"
+  local role="$2"
+  local index="$3"
+  local current tmp patch_file
+  local -a patch_chain=()
+  local cluster_dir patches_dir role_prefix
+
+  patch_chain+=("${ALL_PATCH_FILES[@]}")
+  if [[ "${role}" == "control-plane" ]]; then
+    patch_chain+=("${CP_PATCH_FILES[@]}")
+    role_prefix="controlplane"
+  else
+    patch_chain+=("${WORKER_PATCH_FILES[@]}")
+    role_prefix="worker"
+  fi
+
+  cluster_dir="$(dirname "${CP_CONFIG_PATH}")"
+  patches_dir="${cluster_dir}/patches"
+  if [[ -d "${patches_dir}" ]]; then
+    [[ -f "${patches_dir}/${role_prefix}-common.patch.yaml" ]] && patch_chain+=("${patches_dir}/${role_prefix}-common.patch.yaml")
+    [[ -f "${patches_dir}/${role_prefix}-${index}.patch.yaml" ]] && patch_chain+=("${patches_dir}/${role_prefix}-${index}.patch.yaml")
+  fi
+
+  if (( ${#patch_chain[@]} == 0 )); then
+    printf '%s\n' "${src_cfg}"
+    return 0
+  fi
+
+  current="$(mktemp)"
+  cp "${src_cfg}" "${current}"
+  for patch_file in "${patch_chain[@]}"; do
+    [[ -n "${patch_file}" ]] || continue
+    tmp="$(mktemp)"
+    talosctl machineconfig patch "${current}" -p "@${patch_file}" -o "${tmp}" >/dev/null
+    mv "${tmp}" "${current}"
+  done
+  printf '%s\n' "${current}"
+}
+
+ensure_cdrom_device() {
+  local vm_name="$1"
+  local device_name=""
+
+  device_name="$(govc device.info -vm "${vm_name}" | awk '$1=="Name:" && $2 ~ /^cdrom-/ {print $2; exit}')"
+  if [[ -n "${device_name}" ]]; then
+    printf '%s\n' "${device_name}"
+    return 0
+  fi
+
+  govc device.cdrom.add -vm "${vm_name}" >/dev/null
+  device_name="$(govc device.info -vm "${vm_name}" | awk '$1=="Name:" && $2 ~ /^cdrom-/ {print $2; exit}')"
+  [[ -n "${device_name}" ]] || die "Could not find/add CDROM device for ${vm_name}."
+  printf '%s\n' "${device_name}"
+}
+
+create_vm() {
+  local vm_name="$1"
+  local role="$2"
+  local index="$3"
+  local cpu="$4"
+  local memory_mb="$5"
+  local disk_gb="$6"
+  local cfg_path="$7"
+  local cfg_effective=""
+  local talos_cfg_b64=""
+  local cdrom_device=""
+  local iso_full_path=""
+  local nic_device=""
+  local import_args=()
+  local create_args=(vm.create)
+
+  if vm_exists "${vm_name}"; then
+    if [[ "${VM_OVERWRITE}" == "true" ]]; then
+      log_warn "VM ${vm_name} already exists. Destroying because overwrite=true."
+      govc vm.destroy "${vm_name}"
+    else
+      log_warn "VM ${vm_name} already exists. Skipping create."
+      return 0
+    fi
+  fi
+
+  cfg_effective="$(patched_config_file "${cfg_path}" "${role}" "${index}")"
+  talos_cfg_b64="$(encode_config_base64 "${cfg_effective}")"
+  iso_full_path="[${VM_DATASTORE}] ${ISO_DATASTORE_PATH}"
+
+  if [[ -n "${OVA_PATH}" ]]; then
+    import_args=(import.ova -name "${vm_name}" -ds "${VM_DATASTORE}" -net "${VM_NETWORK}")
+    if [[ -n "${VM_FOLDER}" ]]; then
+      import_args+=(-folder "${VM_FOLDER}")
+    fi
+    if [[ -n "${VM_RESOURCE_POOL}" ]]; then
+      import_args+=(-pool "${VM_RESOURCE_POOL}")
+    fi
+    import_args+=("${OVA_PATH}")
+    govc "${import_args[@]}"
+    govc vm.change -vm "${vm_name}" -c "${cpu}" -m "${memory_mb}"
+    log_warn "Using OVA mode: disk size override is ignored by import.ova."
+  else
+    if [[ -n "${VM_FOLDER}" ]]; then
+      create_args+=(-folder "${VM_FOLDER}")
+    fi
+    if [[ -n "${VM_RESOURCE_POOL}" ]]; then
+      create_args+=(-pool "${VM_RESOURCE_POOL}")
+    fi
+    create_args+=(
+      -on=false
+      -ds "${VM_DATASTORE}"
+      -net "${VM_NETWORK}"
+      -c "${cpu}"
+      -m "${memory_mb}"
+      -g "${VM_GUEST_OS_TYPE}"
+      -firmware "${VM_FIRMWARE}"
+      -disk "${disk_gb}G"
+      -disk.controller "${VM_DISK_CONTROLLER}"
+      -net.adapter "${VM_NET_ADAPTER}"
+      "${vm_name}"
+    )
+    govc "${create_args[@]}"
+  fi
+
+  govc vm.change \
+    -vm "${vm_name}" \
+    -e "guestinfo.talos.config=${talos_cfg_b64}" \
+    -e "guestinfo.talos.config.encoding=base64" \
+    -e "disk.enableUUID=1"
+
+  nic_device="$(govc device.ls -vm "${vm_name}" | awk '$1 ~ /^ethernet-/ {print $1; exit}')"
+  if [[ -n "${nic_device}" ]]; then
+    govc vm.network.change -vm "${vm_name}" -net "${VM_NETWORK}" "${nic_device}"
+  fi
+
+  if [[ -z "${OVA_PATH}" ]]; then
+    cdrom_device="$(ensure_cdrom_device "${vm_name}")"
+    govc device.cdrom.insert -vm "${vm_name}" -device "${cdrom_device}" "${iso_full_path}"
+  fi
+
+  if [[ "${VM_POWER_ON}" == "true" ]]; then
+    govc vm.power -on "${vm_name}"
+  fi
+
+  if [[ "${cfg_effective}" != "${cfg_path}" ]]; then
+    rm -f "${cfg_effective}"
+  fi
+}
+
+destroy_vm() {
+  local vm_name="$1"
+  if vm_exists "${vm_name}"; then
+    log_info "Destroying VM ${vm_name}"
+    govc vm.destroy "${vm_name}"
+  else
+    log_warn "VM ${vm_name} not found. Skipping destroy."
+  fi
+}
+
+print_plan() {
+  log_info "Talos govc plan env=${ENV_NAME} action=${ACTION}"
+  log_info "cluster=${CLUSTER_NAME} cp=${CP_COUNT} worker=${WORKER_COUNT}"
+  log_info "cp(cpu=${CP_CPU},mem=${CP_MEMORY_MB},disk=${CP_DISK_GB}) worker(cpu=${WORKER_CPU},mem=${WORKER_MEMORY_MB},disk=${WORKER_DISK_GB})"
+  log_info "network=${VM_NETWORK} datastore=${VM_DATASTORE} folder=${VM_FOLDER:-<current>} pool=${VM_RESOURCE_POOL:-<current>}"
+  if [[ -n "${OVA_PATH}" ]]; then
+    log_info "ova=${OVA_PATH}"
+  else
+    log_info "iso=[${VM_DATASTORE}] ${ISO_DATASTORE_PATH}"
+  fi
+  log_info "cp-config=${CP_CONFIG_PATH} worker-config=${WORKER_CONFIG_PATH}"
+  if (( ${#ALL_PATCH_FILES[@]} > 0 || ${#CP_PATCH_FILES[@]} > 0 || ${#WORKER_PATCH_FILES[@]} > 0 )); then
+    log_info "patches(all=${#ALL_PATCH_FILES[@]},cp=${#CP_PATCH_FILES[@]},worker=${#WORKER_PATCH_FILES[@]})"
+  fi
+}
+
+execute_action() {
+  local i vm_name cfg
+
+  for ((i = 1; i <= CP_COUNT; i++)); do
+    vm_name="$(vm_name_for_role "control-plane" "${i}")"
+    cfg="$(config_for_index "${CP_CONFIG_PATH}" "${i}")"
+    case "${ACTION}" in
+      create) create_vm "${vm_name}" "control-plane" "${i}" "${CP_CPU}" "${CP_MEMORY_MB}" "${CP_DISK_GB}" "${cfg}" ;;
+      destroy) destroy_vm "${vm_name}" ;;
+    esac
+  done
+
+  for ((i = 1; i <= WORKER_COUNT; i++)); do
+    vm_name="$(vm_name_for_role "worker" "${i}")"
+    cfg="$(config_for_index "${WORKER_CONFIG_PATH}" "${i}")"
+    case "${ACTION}" in
+      create) create_vm "${vm_name}" "worker" "${i}" "${WORKER_CPU}" "${WORKER_MEMORY_MB}" "${WORKER_DISK_GB}" "${cfg}" ;;
+      destroy) destroy_vm "${vm_name}" ;;
+    esac
+  done
+}
+
+collect_bootstrap_ips() {
+  local cluster_dir out_file tmp_file
+  local deadline now i vm_name ip
+  local total_expected=$((CP_COUNT + WORKER_COUNT))
+  local found=0
+  declare -A seen_ips=()
+
+  cluster_dir="$(dirname "${CP_CONFIG_PATH}")"
+  out_file="${cluster_dir}/bootstrap-ips.txt"
+  deadline=$(( "$(date +%s)" + WAIT_BOOTSTRAP_TIMEOUT ))
+  : > "${out_file}"
+
+  while true; do
+    now="$(date +%s)"
+    if (( now > deadline )); then
+      break
+    fi
+
+    tmp_file="$(mktemp)"
+    found=0
+    seen_ips=()
+
+    for ((i = 1; i <= CP_COUNT; i++)); do
+      vm_name="$(vm_name_for_role "control-plane" "${i}")"
+      ip="$(govc vm.info "${vm_name}" | awk -F': ' '/IP address:/ {print $2}' | xargs)"
+      if [[ -n "${ip}" && "${ip}" != "<nil>" ]]; then
+        printf '%s %s %s\n' "control-plane-${i}" "${vm_name}" "${ip}" >> "${tmp_file}"
+        seen_ips["${ip}"]=1
+      fi
+    done
+
+    for ((i = 1; i <= WORKER_COUNT; i++)); do
+      vm_name="$(vm_name_for_role "worker" "${i}")"
+      ip="$(govc vm.info "${vm_name}" | awk -F': ' '/IP address:/ {print $2}' | xargs)"
+      if [[ -n "${ip}" && "${ip}" != "<nil>" ]]; then
+        printf '%s %s %s\n' "worker-${i}" "${vm_name}" "${ip}" >> "${tmp_file}"
+        seen_ips["${ip}"]=1
+      fi
+    done
+
+    mv "${tmp_file}" "${out_file}"
+
+    found="${#seen_ips[@]}"
+    if (( found >= total_expected )); then
+      log_info "Captured bootstrap IPs for all ${total_expected} nodes."
+      log_info "Bootstrap inventory: ${out_file}"
+      return 0
+    fi
+
+    sleep 5
+  done
+
+  log_warn "Timeout waiting bootstrap DHCP IPs (${WAIT_BOOTSTRAP_TIMEOUT}s). Partial inventory in ${out_file}."
+  [[ -s "${out_file}" ]] && cat "${out_file}" || true
+}
+
+wait_talos_api_ready() {
+  local cluster_dir out_file
+  local deadline now role vm_name ip
+  local pending
+  local -a nodes=()
+
+  cluster_dir="$(dirname "${CP_CONFIG_PATH}")"
+  out_file="${cluster_dir}/bootstrap-ips.txt"
+  [[ -s "${out_file}" ]] || {
+    log_warn "Skipping Talos API readiness check: bootstrap inventory missing (${out_file})."
+    return 0
+  }
+
+  while read -r role vm_name ip; do
+    [[ -n "${role:-}" && -n "${vm_name:-}" && -n "${ip:-}" ]] || continue
+    nodes+=("${role}|${vm_name}|${ip}")
+  done < "${out_file}"
+
+  (( ${#nodes[@]} > 0 )) || {
+    log_warn "Skipping Talos API readiness check: inventory is empty (${out_file})."
+    return 0
+  }
+
+  deadline=$(( "$(date +%s)" + WAIT_TALOS_API_TIMEOUT ))
+  while true; do
+    pending=0
+    for entry in "${nodes[@]}"; do
+      role="${entry%%|*}"
+      entry="${entry#*|}"
+      vm_name="${entry%%|*}"
+      ip="${entry##*|}"
+      if ! timeout 2 bash -c "cat < /dev/null > /dev/tcp/${ip}/50000" 2>/dev/null; then
+        pending=$((pending + 1))
+        log_info "Waiting Talos API on ${role} (${vm_name}) ${ip}:50000"
+      fi
+    done
+
+    if (( pending == 0 )); then
+      log_info "Talos API (:50000) reachable on all nodes."
+      return 0
+    fi
+
+    now="$(date +%s)"
+    if (( now > deadline )); then
+      log_warn "Timeout waiting Talos API readiness (${WAIT_TALOS_API_TIMEOUT}s)."
+      return 0
+    fi
+    sleep 5
+  done
+}
+
+main() {
+  parse_args "$@"
+  load_context
+  validate_inputs
+  print_plan
+
+  if [[ "${ACTION}" == "plan" ]]; then
+    return 0
+  fi
+
+  execute_action
+  if [[ "${ACTION}" == "create" && "${WAIT_BOOTSTRAP_IPS}" == "true" ]]; then
+    collect_bootstrap_ips
+    if [[ "${WAIT_TALOS_API}" == "true" ]]; then
+      wait_talos_api_ready
+    fi
+  fi
+  log_info "Action '${ACTION}' completed successfully."
+}
+
+main "$@"

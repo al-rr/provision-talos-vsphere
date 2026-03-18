@@ -70,6 +70,14 @@ export COMMUNICATOR_PROXY_PORT=""
 export COMMUNICATOR_PROXY_USERNAME=""
 export COMMUNICATOR_PROXY_PASSWORD=""
 
+# GOVC lifecycle variables (generic VM provisioning)
+GOVC_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/govc" >/dev/null 2>&1 && pwd)"
+if [[ -f "${GOVC_SCRIPT_DIR}/vars.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "${GOVC_SCRIPT_DIR}/vars.sh"
+fi
+unset GOVC_SCRIPT_DIR
+
 # HAProxy topology and automation
 export HAPROXY_VIP=""
 export HAPROXY_NODE_1_NAME="haproxy-01"
@@ -81,6 +89,30 @@ export HAPROXY_PACKER_OVERRIDE_FILE=""
 export HAPROXY_ANSIBLE_INVENTORY="${BASE_HAPROXY_ANSIBLE_DIR}/inventory"
 export HAPROXY_ANSIBLE_PLAYBOOK="${BASE_HAPROXY_ANSIBLE_DIR}/playbooks/provision_haproxy.yml"
 export HAPROXY_TERRAFORM_DIR="${BASE_HAPROXY_TERRAFORM_DIR}"
+
+# Additional HAProxy lifecycle variables (install/setup/hardening)
+HAPROXY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/ha-proxy" >/dev/null 2>&1 && pwd)"
+if [[ -f "${HAPROXY_SCRIPT_DIR}/vars.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "${HAPROXY_SCRIPT_DIR}/vars.sh"
+fi
+unset HAPROXY_SCRIPT_DIR
+
+# Keepalived lifecycle variables (install/setup)
+KEEPALIVED_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/keepalived" >/dev/null 2>&1 && pwd)"
+if [[ -f "${KEEPALIVED_SCRIPT_DIR}/vars.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "${KEEPALIVED_SCRIPT_DIR}/vars.sh"
+fi
+unset KEEPALIVED_SCRIPT_DIR
+
+# Talos lifecycle variables (talosctl install/provision wrappers)
+TALOS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/talos" >/dev/null 2>&1 && pwd)"
+if [[ -f "${TALOS_SCRIPT_DIR}/vars.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "${TALOS_SCRIPT_DIR}/vars.sh"
+fi
+unset TALOS_SCRIPT_DIR
 
 # HAProxy VM convenience values
 export TF_TEMPLATE_NAME=""
@@ -98,7 +130,9 @@ export TALOS_TERRAFORM_DIR="${BASE_TALOS_TERRAFORM_DIR}"
 export TALOS_CLUSTER_NAME="talos-prod"
 export TALOS_CLUSTER_ENDPOINT=""
 export TALOS_TEMPLATE_NAME=""
+export TALOS_OVA_PATH=""
 export TALOS_OVF_URL=""
+export TALOS_ISO_DATASTORE_PATH="ISOs/talos-v1.12.4-uefi.iso"
 export TALOS_CONTROL_PLANE_COUNT="3"
 export TALOS_WORKER_COUNT="2"
 export TALOS_CONTROL_PLANE_CPU="2"
@@ -115,6 +149,17 @@ export TALOS_NAMESERVERS=""
 export TALOS_DOMAIN="infra.local"
 export TALOS_CONTROL_PLANE_CONFIG_PATH=""
 export TALOS_WORKER_CONFIG_PATH=""
+export TALOS_SINGLE_NODE_VM_NAME="talos-single-node-01"
+export TALOS_SINGLE_NODE_CPU="${TALOS_CONTROL_PLANE_CPU}"
+export TALOS_SINGLE_NODE_MEMORY_MB="${TALOS_CONTROL_PLANE_MEMORY_MB}"
+export TALOS_SINGLE_NODE_DISK_GB="${TALOS_CONTROL_PLANE_DISK_GB}"
+export TALOS_SINGLE_NODE_CONFIG_PATH="${TALOS_CONTROL_PLANE_CONFIG_PATH}"
+# Legacy compatibility aliases:
+export TALOS_SIMPLE_VM_NAME="${TALOS_SIMPLE_VM_NAME:-${TALOS_SINGLE_NODE_VM_NAME}}"
+export TALOS_SIMPLE_CPU="${TALOS_SIMPLE_CPU:-${TALOS_SINGLE_NODE_CPU}}"
+export TALOS_SIMPLE_MEMORY_MB="${TALOS_SIMPLE_MEMORY_MB:-${TALOS_SINGLE_NODE_MEMORY_MB}}"
+export TALOS_SIMPLE_DISK_GB="${TALOS_SIMPLE_DISK_GB:-${TALOS_SINGLE_NODE_DISK_GB}}"
+export TALOS_SIMPLE_CONFIG_PATH="${TALOS_SIMPLE_CONFIG_PATH:-${TALOS_SINGLE_NODE_CONFIG_PATH}}"
 
 # Optional local ISO path for upload automation
 export ISO_LOCAL_PATH=""
