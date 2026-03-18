@@ -153,3 +153,44 @@ talosctl --talosconfig "${TALOSCONFIG}" \
 ```
 
 Then wait for `Ready` before moving to the next node.
+
+## Scale-Out (Add More Workers)
+
+To add one more worker (example: worker-3 with `192.168.0.93`):
+
+1. Create `overlays/lab/talos/k8s-cluster-lab/patches/worker-3.patch.yaml`:
+
+```yaml
+machine:
+  network:
+    interfaces:
+      - interface: eth0
+        addresses:
+          - 192.168.0.93/24
+        routes:
+          - network: 0.0.0.0/0
+            gateway: 192.168.0.2
+        dhcp: false
+    nameservers:
+      - 192.168.0.2
+```
+
+2. Re-run provisioning for workers only, increasing `--worker-count`:
+
+```bash
+source /tmp/govc-test-vars.sh
+./overlays/base/scripts/govc/provision_talos.sh \
+  --env=lab \
+  --cluster-name=k8s-cluster-lab \
+  --cp-count=0 \
+  --worker-count=3 \
+  --ova-path="https://factory.talos.dev/image/903b2da78f99adef03cbbd4df6714563823f63218508800751560d3bc3557e40/v1.12.4/vmware-amd64.ova" \
+  create
+```
+
+3. Validate worker join:
+
+```bash
+talosctl --talosconfig overlays/lab/talos/k8s-cluster-lab/talosconfig -n 192.168.0.93 version
+KUBECONFIG=/home/vagrant/.kube/config kubectl get nodes -o wide
+```
