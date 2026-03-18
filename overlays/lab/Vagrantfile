@@ -101,11 +101,11 @@ Vagrant.configure("2") do |config|
 
     controller.vm.provision "shell",
                             privileged: false,
-                            inline: "bash #{WORKDIR}/overlays/lab/scripts/install-ansible.sh",
+                            inline: "bash #{WORKDIR}/overlays/lab/controller/scripts/install-ansible.sh",
                             env: controller_env
     controller.vm.provision "shell",
                             privileged: false,
-                            inline: "bash #{WORKDIR}/overlays/lab/scripts/install-collections.sh",
+                            inline: "bash #{WORKDIR}/overlays/lab/controller/scripts/install-collections.sh",
                             env: controller_env
     
 

@@ -125,7 +125,7 @@ main() {
   create_venv
   prepare_venv_pip_tooling
   ensure_ssh_assets
-  log_info "Bootstrap completed. Next step: overlays/lab/scripts/install-collections.sh"
+  log_info "Bootstrap completed. Next step: overlays/lab/controller/scripts/install-collections.sh"
 }
 
 main "$@"
