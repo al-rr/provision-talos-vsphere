@@ -8,7 +8,7 @@ From the controller, you can:
 - install `talosctl`
 - install `kubectl`
 - install `helm` (Helm 3)
-- configure Helm repositories for cluster add-ons (for example Cilium)
+- prepare OCI-based Helm artifacts for cluster add-ons (for example Cilium)
 - configure `~/.talos/config`
 - generate and use `~/.kube/config`
 
@@ -78,18 +78,22 @@ talosctl --talosconfig ~/.talos/config \
   --endpoints 192.168.0.88
 ```
 
-## 6) Configure Helm Repositories (Cilium)
+## 6) Prepare Cilium Values Using OCI (No Helm Repo Add)
 
 ```bash
-helm repo add cilium https://helm.cilium.io/
-helm repo update
-helm repo list
+mkdir -p overlays/lab/talos/talos/cilium
+
+helm show values oci://quay.io/cilium/charts/cilium --version 1.19.1 \
+  > overlays/lab/talos/talos/cilium/values.base.yaml
+
+cp overlays/lab/talos/talos/cilium/values.base.yaml \
+  overlays/lab/talos/talos/cilium/values.yaml
 ```
 
 Why this is important:
 - Talos cluster bootstrap prepares Kubernetes control plane and workers, but does not install your Day-2 networking stack.
 - In the new `talos` cluster flow, we disable default CNI and install Cilium as the cluster CNI.
-- Cilium is installed from Helm charts, so the controller needs the Cilium Helm repository configured.
+- Cilium is consumed from OCI charts, and we keep values under version control before installation.
 - This step runs on the controller host (the operator node), not inside Talos nodes.
 
 ## 7) Validate

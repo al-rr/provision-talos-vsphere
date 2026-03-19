@@ -1,0 +1,78 @@
+apiVersion: platform.labs/v1alpha1
+kind: TalosClusterSpec
+metadata:
+  name: talos
+  environment: lab
+spec:
+  purpose: "Pre-production style Talos cluster on ESXi via govc"
+
+  versions:
+    talos: "v1.12.4"
+    kubernetes: "v1.35.0"
+    ciliumChart: "1.19.1"
+
+  access:
+    controlPlaneEndpoint: "https://192.168.0.250:6443"
+    talosApiPort: 50000
+    kubeApiPort: 6443
+
+  network:
+    podCIDR: "10.244.0.0/16"
+    serviceCIDR: "10.96.0.0/12"
+    gateway: "192.168.0.2"
+    nameservers:
+      - "192.168.0.2"
+    note: "Lab has no dedicated DNS/NTP service; this is a constrained environment."
+
+  loadBalancer:
+    vip: "192.168.0.250"
+    backends:
+      - "192.168.0.88:6443"
+      - "192.168.0.89:6443"
+      - "192.168.0.90:6443"
+
+  topology:
+    controlPlanes:
+      count: 3
+      nodes:
+        - name: "talos-control-plane-1"
+          ip: "192.168.0.88"
+        - name: "talos-control-plane-2"
+          ip: "192.168.0.89"
+        - name: "talos-control-plane-3"
+          ip: "192.168.0.90"
+    workers:
+      count: 3
+      nodes:
+        - name: "talos-worker-1"
+          ip: "192.168.0.91"
+        - name: "talos-worker-2"
+          ip: "192.168.0.92"
+        - name: "talos-worker-3"
+          ip: "192.168.0.93"
+
+  cni:
+    strategy: "Disable Talos default CNI and install Cilium (OCI + Helm 3)"
+    talosPatchFile: "overlays/lab/talos/talos/patches/cni.patch.yaml"
+    ciliumValuesFile: "overlays/lab/talos/talos/cilium/values.yaml"
+
+  controllerPrerequisites:
+    tools:
+      - talosctl
+      - kubectl
+      - helm3
+    shell:
+      - "kubectl completion + alias k"
+      - "helm completion"
+
+  operations:
+    bootstrapMode: "cluster-bootstrap.sh --mode=all"
+    globalPatchesDefault: "disabled"
+    globalPatchesEnableFlag: "--enable-global-patches"
+    clusterPatchesDir: "overlays/lab/talos/talos/patches"
+
+  validation:
+    checks:
+      - "talosctl version against control-plane nodes"
+      - "kubectl get nodes -o wide"
+      - "Cilium chart template validation before install"
