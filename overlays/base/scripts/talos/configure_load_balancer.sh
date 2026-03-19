@@ -13,8 +13,12 @@
 # @arg --port string SSH port for HAProxy hosts. Defaults to 22.
 # @arg --ssh-key string SSH private key used for all HAProxy hosts.
 # @arg --backend-name string HAProxy backend name. Defaults to talos_k8s_api_backend.
+# @arg --frontend-name string HAProxy frontend name. Defaults to talos_k8s_api.
 # @arg --api-port string Talos API port. Defaults to 6443.
+# @arg --vip string VIP/bind IP for generated frontend (used with --append).
+# @arg --cluster-name string Cluster name used in auto-generated frontend/backend names.
 # @arg --bootstrap-file string Optional bootstrap inventory fallback file.
+# @flag --append Append/update generated frontend/backend into current HAProxy blocks.
 # @flag --dry-run,-n Print actions without applying changes.
 # @flag --help,-h Show usage information.
 
@@ -26,7 +30,11 @@ SSH_USER=""
 SSH_PORT="22"
 SSH_KEY=""
 BACKEND_NAME="talos_k8s_api_backend"
+FRONTEND_NAME="talos_k8s_api"
 API_PORT="6443"
+VIP_OVERRIDE=""
+CLUSTER_NAME_OVERRIDE=""
+APPEND_MODE="false"
 CP_IPS_OVERRIDE=""
 LB_HOSTS_OVERRIDE=""
 BOOTSTRAP_FILE_OVERRIDE=""
@@ -53,8 +61,12 @@ Options:
       --port=<port>           SSH port (default: 22)
       --ssh-key=<path>        SSH private key used for HAProxy hosts
       --backend-name=<name>   HAProxy backend name (default: talos_k8s_api_backend)
+      --frontend-name=<name>  HAProxy frontend name (default: talos_k8s_api)
       --api-port=<port>       Talos API port (default: 6443)
+      --vip=<ip>              VIP/bind IP used by generated frontend in --append mode
+      --cluster-name=<name>   Cluster name used for generated names
       --bootstrap-file=<path> Bootstrap inventory fallback file
+      --append                Append/update generated frontend/backend in HAProxy blocks
   -n, --dry-run               Show actions without executing
   -h, --help                  Show this help
 EOF
@@ -76,8 +88,12 @@ parse_args() {
       --port=*) SSH_PORT="${1#*=}"; shift ;;
       --ssh-key=*) SSH_KEY="${1#*=}"; shift ;;
       --backend-name=*) BACKEND_NAME="${1#*=}"; shift ;;
+      --frontend-name=*) FRONTEND_NAME="${1#*=}"; shift ;;
       --api-port=*) API_PORT="${1#*=}"; shift ;;
+      --vip=*) VIP_OVERRIDE="${1#*=}"; shift ;;
+      --cluster-name=*) CLUSTER_NAME_OVERRIDE="${1#*=}"; shift ;;
       --bootstrap-file=*) BOOTSTRAP_FILE_OVERRIDE="${1#*=}"; shift ;;
+      --append) APPEND_MODE="true"; shift ;;
       -n|--dry-run) DRY_RUN="true"; shift ;;
       -h|--help) usage; exit 0 ;;
       *) usage; die "Unknown argument: $1" ;;
@@ -149,6 +165,64 @@ build_backend_block() {
   printf '%s' "${block}"
 }
 
+build_frontend_block() {
+  local frontend_name="$1"
+  local bind_target="$2"
+  local backend_name="$3"
+  local api_port="$4"
+  local block=""
+
+  block+=$'frontend '"${frontend_name}"$'\n'
+  block+="  bind ${bind_target}:${api_port}"$'\n'
+  block+=$'  mode tcp\n'
+  block+="  default_backend ${backend_name}"$'\n'
+
+  printf '%s' "${block}"
+}
+
+append_or_replace_named_block() {
+  local existing="$1"
+  local new_block="$2"
+  local kind="$3"
+  local name="$4"
+  local line=""
+  local out=""
+  local in_target="false"
+
+  if [[ -z "${existing}" ]]; then
+    printf '%s' "${new_block}"
+    return 0
+  fi
+
+  while IFS= read -r line; do
+    if [[ "${line}" =~ ^${kind}[[:space:]]+${name}$ ]]; then
+      if [[ "${in_target}" == "false" ]]; then
+        [[ -n "${out}" ]] && out+=$'\n'
+        out+="${new_block}"$'\n'
+        in_target="true"
+      fi
+      continue
+    fi
+
+    if [[ "${in_target}" == "true" ]]; then
+      if [[ "${line}" =~ ^(frontend|backend)[[:space:]]+ ]]; then
+        in_target="false"
+        out+="${line}"$'\n'
+      fi
+      continue
+    fi
+
+    out+="${line}"$'\n'
+  done <<<"${existing}"
+
+  if [[ "${in_target}" == "false" && ! "${existing}" =~ ^${kind}[[:space:]]+${name}$ ]]; then
+    [[ -n "${out}" ]] && out+=$'\n'
+    out+="${new_block}"$'\n'
+  fi
+
+  printf '%s' "${out}" | awk 'BEGIN{prev_blank=0} {if ($0=="") {if (!prev_blank) print; prev_blank=1} else {print; prev_blank=0}}' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+}
+
 run_or_echo() {
   if [[ "${DRY_RUN}" == "true" ]]; then
     log_info "[DRY-RUN] $*"
@@ -161,12 +235,22 @@ main() {
   local cp_source=""
   local lb_source=""
   local bootstrap_file=""
+  local cluster_name=""
+  local frontend_name_resolved=""
+  local backend_name_resolved=""
+  local vip_resolved=""
+  local bind_target=""
+  local frontend_block=""
   local cp_raw=""
   local lb_raw=""
   local cp_ip=""
   local lb_host=""
   local backend_block=""
+  local merged_frontends=""
+  local merged_backends=""
   local q_backend=""
+  local q_frontends=""
+  local q_backends=""
   local ssh_user_resolved=""
   local -a cp_ips=()
   local -a lb_hosts=()
@@ -186,8 +270,10 @@ main() {
   [[ "${SSH_PORT}" =~ ^[0-9]+$ ]] || die "--port must be numeric."
   [[ "${SSH_PORT}" -ge 1 && "${SSH_PORT}" -le 65535 ]] || die "--port must be between 1 and 65535."
   [[ -n "${BACKEND_NAME}" ]] || die "--backend-name cannot be empty."
+  [[ -n "${FRONTEND_NAME}" ]] || die "--frontend-name cannot be empty."
   [[ "${API_PORT}" =~ ^[0-9]+$ ]] || die "--api-port must be numeric."
   [[ "${API_PORT}" -ge 1 && "${API_PORT}" -le 65535 ]] || die "--api-port must be between 1 and 65535."
+  [[ "${APPEND_MODE}" == "true" || "${APPEND_MODE}" == "false" ]] || die "--append parsing failed."
 
   cp_source="${CP_IPS_OVERRIDE:-}"
   if [[ -z "${cp_source}" ]]; then
@@ -237,10 +323,43 @@ main() {
     [[ -f "${SSH_KEY}" ]] || die "SSH key not found: ${SSH_KEY}"
   fi
 
-  backend_block="$(build_backend_block "${BACKEND_NAME}" "${API_PORT}" "${cp_ips[@]}")"
-  printf -v q_backend '%q' "${backend_block}"
+  if [[ "${APPEND_MODE}" == "true" ]]; then
+    cluster_name="${CLUSTER_NAME_OVERRIDE:-${TALOS_CLUSTER_NAME:-talos}}"
+    vip_resolved="${VIP_OVERRIDE:-${HAPROXY_VIP:-}}"
+    [[ -n "${vip_resolved}" ]] || die "In --append mode, set --vip or HAPROXY_VIP."
+    is_ipv4 "${vip_resolved}" || die "Invalid VIP IP: ${vip_resolved}"
 
-  log_info "Configuring HAProxy backend '${BACKEND_NAME}' with ${#cp_ips[@]} control-plane node(s)."
+    frontend_name_resolved="${FRONTEND_NAME}"
+    backend_name_resolved="${BACKEND_NAME}"
+    if [[ "${FRONTEND_NAME}" == "talos_k8s_api" ]]; then
+      frontend_name_resolved="${cluster_name}_k8s_api"
+    fi
+    if [[ "${BACKEND_NAME}" == "talos_k8s_api_backend" ]]; then
+      backend_name_resolved="${cluster_name}_k8s_api_backend"
+    fi
+
+    bind_target="${vip_resolved}"
+    frontend_block="$(build_frontend_block "${frontend_name_resolved}" "${bind_target}" "${backend_name_resolved}" "${API_PORT}")"
+    backend_block="$(build_backend_block "${backend_name_resolved}" "${API_PORT}" "${cp_ips[@]}")"
+
+    merged_frontends="$(append_or_replace_named_block "${HAPROXY_FRONTENDS_BLOCK:-}" "${frontend_block}" "frontend" "${frontend_name_resolved}")"
+    merged_backends="$(append_or_replace_named_block "${HAPROXY_BACKENDS_BLOCK:-}" "${backend_block}" "backend" "${backend_name_resolved}")"
+  else
+    backend_block="$(build_backend_block "${BACKEND_NAME}" "${API_PORT}" "${cp_ips[@]}")"
+  fi
+
+  printf -v q_backend '%q' "${backend_block}"
+  if [[ "${APPEND_MODE}" == "true" ]]; then
+    printf -v q_frontends '%q' "${merged_frontends}"
+    printf -v q_backends '%q' "${merged_backends}"
+  fi
+
+  if [[ "${APPEND_MODE}" == "true" ]]; then
+    log_info "Appending/updating HAProxy frontend/backend for cluster '${cluster_name}' (${vip_resolved}:${API_PORT})."
+    log_info "Frontend: ${frontend_name_resolved} | Backend: ${backend_name_resolved}"
+  else
+    log_info "Configuring HAProxy backend '${BACKEND_NAME}' with ${#cp_ips[@]} control-plane node(s)."
+  fi
   log_info "Targets: ${lb_hosts[*]}"
 
   for lb_host in "${lb_hosts[@]}"; do
@@ -250,11 +369,19 @@ main() {
     fi
 
     if [[ "${DRY_RUN}" == "true" ]]; then
-      log_info "[DRY-RUN] HAPROXY_BACKENDS_BLOCK=${q_backend} ${setup_cmd[*]}"
+      if [[ "${APPEND_MODE}" == "true" ]]; then
+        log_info "[DRY-RUN] HAPROXY_FRONTENDS_BLOCK=${q_frontends} HAPROXY_BACKENDS_BLOCK=${q_backends} ${setup_cmd[*]}"
+      else
+        log_info "[DRY-RUN] HAPROXY_BACKENDS_BLOCK=${q_backend} ${setup_cmd[*]}"
+      fi
       continue
     fi
 
-    HAPROXY_BACKENDS_BLOCK="${backend_block}" "${setup_cmd[@]}"
+    if [[ "${APPEND_MODE}" == "true" ]]; then
+      HAPROXY_FRONTENDS_BLOCK="${merged_frontends}" HAPROXY_BACKENDS_BLOCK="${merged_backends}" "${setup_cmd[@]}"
+    else
+      HAPROXY_BACKENDS_BLOCK="${backend_block}" "${setup_cmd[@]}"
+    fi
   done
 
   log_info "HAProxy Talos backend configuration completed."

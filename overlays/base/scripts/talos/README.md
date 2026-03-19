@@ -197,6 +197,33 @@ Optional:
 - `--cp-ips=192.168.0.88,192.168.0.89,192.168.0.90`
 - `--lb-hosts=172.17.20.181,172.17.20.182`
 
+### Multi-Cluster On Shared HAProxy Pair
+
+If the same HAProxy pair serves more than one Talos cluster, use:
+- one VIP per cluster in Keepalived (`KEEPALIVED_VIPS`)
+- one frontend/backend pair per cluster in HAProxy
+
+Use append mode so existing frontends/backends are preserved:
+
+```bash
+./overlays/base/scripts/talos/configure_load_balancer.sh \
+  --env=lab \
+  --append \
+  --cluster-name=talos \
+  --vip=192.168.0.30 \
+  --cp-ips=192.168.0.61,192.168.0.62,192.168.0.63 \
+  --lb-hosts=192.168.0.55,192.168.0.56 \
+  --user=vagrant \
+  --ssh-key=/path/to/key
+```
+
+Notes:
+- `--append` updates the named frontend/backend if they already exist.
+- Default generated names in append mode are:
+  - frontend: `<cluster-name>_k8s_api`
+  - backend: `<cluster-name>_k8s_api_backend`
+- You can override names with `--frontend-name` and `--backend-name`.
+
 ## Post-Bootstrap Operations (Day-2)
 
 After bootstrap, normal operations are usually:
