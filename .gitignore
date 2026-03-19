@@ -27,6 +27,8 @@ overlays/base/packer/artifacts/
 overlays/base/packer/manifests/
 overlays/lab/talos/generated/
 overlays/prod/talos/generated/
+overlays/lab/talos/*/bootstrap-ips.txt
+overlays/prod/talos/*/bootstrap-ips.txt
 *.tfstate
 *.tfstate.backup
 *.iso
