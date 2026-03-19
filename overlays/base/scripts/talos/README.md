@@ -7,6 +7,7 @@ It provides:
 - `install.sh`: install/upgrade `talosctl` (idempotent, local or remote)
 - `provision-single-node.sh`: wrapper for single-node Talos provisioning via `govc`
 - `provision-cluster.sh`: wrapper for Talos cluster provisioning via `govc`
+- `cluster-bootstrap.sh`: Day-1 cluster flow (`generate`, `apply`, `bootstrap`, `all`)
 - `configure_load_balancer.sh`: configure HAProxy backend servers for Talos control planes
 - `vars.sh`: module defaults (`TALOSCTL_VERSION`, `TALOSCTL_INSTALL_DIR`)
 
@@ -48,6 +49,108 @@ Run cluster provisioning:
 
 ```bash
 ./overlays/base/scripts/talos/provision-cluster.sh --env=lab create
+```
+
+## Day-1 Cluster Flow
+
+Use `cluster-bootstrap.sh` after VMs are provisioned and reachable on Talos API (`:50000`).
+
+Generate only:
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=generate
+```
+
+Apply configs only:
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=apply
+```
+
+Bootstrap only:
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=bootstrap
+```
+
+Full Day-1 sequence:
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=all
+```
+
+Safe simulation:
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=all --dry-run
+```
+
+Enable global patches explicitly (optional):
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh \
+  --env=lab \
+  --mode=all \
+  --enable-global-patches
+```
+
+## Create A New Cluster From Scratch
+
+Example to create a brand-new cluster named `talos`:
+
+1. Provision VMs first (control planes/workers) with `provision-cluster.sh` or `govc`.
+2. Run Day-1 flow with a dedicated output directory and explicit node IPs:
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh \
+  --env=lab \
+  --mode=all \
+  --cluster-name=talos \
+  --endpoint=https://192.168.0.250:6443 \
+  --generated-dir=overlays/lab/talos/talos/generated \
+  --cp-ips=192.168.0.88,192.168.0.89,192.168.0.90 \
+  --worker-ips=192.168.0.91,192.168.0.92,192.168.0.93
+```
+
+Optional dry-run before applying:
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh \
+  --env=lab \
+  --mode=all \
+  --dry-run \
+  --cluster-name=talos \
+  --endpoint=https://192.168.0.250:6443 \
+  --generated-dir=overlays/lab/talos/talos/generated \
+  --cp-ips=192.168.0.88,192.168.0.89,192.168.0.90 \
+  --worker-ips=192.168.0.91,192.168.0.92,192.168.0.93
+```
+
+If you also want shared/global patches for this run, add:
+
+```bash
+--enable-global-patches
+```
+
+Global patch directories (optional):
+- `overlays/<env>/talos/patches-available`: candidate patches
+- `overlays/<env>/talos/patches-enabled`: active patches used when enabled
+- Legacy fallback: `overlays/<env>/talos/patches` (if `patches-enabled` does not exist)
+
+Suggested activation flow:
+
+```bash
+mkdir -p overlays/lab/talos/patches-enabled
+cp overlays/lab/talos/patches-available/flannel.patch.yaml overlays/lab/talos/patches-enabled/
+```
+
+Then run with:
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh \
+  --env=lab \
+  --mode=all \
+  --enable-global-patches
 ```
 
 ## Controller Access
