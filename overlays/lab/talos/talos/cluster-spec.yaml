@@ -12,7 +12,7 @@ spec:
     ciliumChart: "1.19.1"
 
   access:
-    controlPlaneEndpoint: "https://192.168.0.250:6443"
+    controlPlaneEndpoint: "https://192.168.0.30:6443"
     talosApiPort: 50000
     kubeApiPort: 6443
 
@@ -25,31 +25,39 @@ spec:
     note: "Lab has no dedicated DNS/NTP service; this is a constrained environment."
 
   loadBalancer:
-    vip: "192.168.0.250"
+    implementation: "HAProxy + Keepalived"
+    vip: "192.168.0.30"
+    nodes:
+      - name: "talos-lb-1"
+        ip: "192.168.0.55"
+        role: "MASTER"
+      - name: "talos-lb-2"
+        ip: "192.168.0.56"
+        role: "BACKUP"
     backends:
-      - "192.168.0.88:6443"
-      - "192.168.0.89:6443"
-      - "192.168.0.90:6443"
+      - "192.168.0.61:6443"
+      - "192.168.0.62:6443"
+      - "192.168.0.63:6443"
 
   topology:
     controlPlanes:
       count: 3
       nodes:
-        - name: "talos-control-plane-1"
-          ip: "192.168.0.88"
-        - name: "talos-control-plane-2"
-          ip: "192.168.0.89"
-        - name: "talos-control-plane-3"
-          ip: "192.168.0.90"
+        - name: "talos-cp-1"
+          ip: "192.168.0.61"
+        - name: "talos-cp-2"
+          ip: "192.168.0.62"
+        - name: "talos-cp-3"
+          ip: "192.168.0.63"
     workers:
       count: 3
       nodes:
         - name: "talos-worker-1"
-          ip: "192.168.0.91"
+          ip: "192.168.0.71"
         - name: "talos-worker-2"
-          ip: "192.168.0.92"
+          ip: "192.168.0.72"
         - name: "talos-worker-3"
-          ip: "192.168.0.93"
+          ip: "192.168.0.73"
 
   cni:
     strategy: "Disable Talos default CNI and install Cilium (OCI + Helm 3)"
