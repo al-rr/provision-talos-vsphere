@@ -163,6 +163,21 @@ is documented in `overlays/lab/controller/README.md`.
 - Default path is **OVA** (production-ready flow), controlled by `TALOS_OVA_PATH`.
 - ISO is only fallback/testing (`TALOS_ISO_DATASTORE_PATH`) when OVA is not set.
 
+## DNS Strategy For Lab
+
+If your lab network does not provide reliable DNS, use a dedicated DNS VM before Talos bootstrap.
+
+Recommended module:
+- `overlays/base/scripts/dns/provision.sh`
+- `overlays/base/scripts/dns/install.sh`
+- `overlays/base/scripts/dns/setup.sh`
+
+Suggested order:
+1. Provision DNS VM with GOVC.
+2. Install and configure dnsmasq in that VM.
+3. Set Talos and GOVC nameservers to the DNS VM IP (for example in `overlays/base/scripts/govc/vars-esxi-prod.sh`).
+4. Run Talos Day-1 flow (`cluster-bootstrap.sh`).
+
 ## Clean Recreate Flow (Cluster)
 
 ```bash
