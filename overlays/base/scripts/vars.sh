@@ -106,14 +106,6 @@ if [[ -f "${KEEPALIVED_SCRIPT_DIR}/vars.sh" ]]; then
 fi
 unset KEEPALIVED_SCRIPT_DIR
 
-# DNS lifecycle variables (provision/install/setup)
-DNS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/dns" >/dev/null 2>&1 && pwd)"
-if [[ -f "${DNS_SCRIPT_DIR}/vars.sh" ]]; then
-  # shellcheck disable=SC1090
-  source "${DNS_SCRIPT_DIR}/vars.sh"
-fi
-unset DNS_SCRIPT_DIR
-
 # Talos lifecycle variables (talosctl install/provision wrappers)
 TALOS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/talos" >/dev/null 2>&1 && pwd)"
 if [[ -f "${TALOS_SCRIPT_DIR}/vars.sh" ]]; then

@@ -63,7 +63,7 @@ If the lab network does not provide stable DNS, provision a dedicated DNS VM fir
 
 Follow:
 
-- [DNS module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/dns/README.md)
+- `infra-gitops/scripts/dnsmasq/README.md`
 
 ### 3. Prepare the load balancer if your cluster uses a VIP
 

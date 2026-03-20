@@ -72,4 +72,4 @@ Use the provisioning entrypoint that belongs to the workload module:
 
 - [Talos VMware provisioning](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/govc/README.md)
 - [HAProxy VMware provisioning](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/ha-proxy/govc/README.md)
-- [DNS module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/dns/README.md)
+- `infra-gitops/scripts/dnsmasq/README.md`

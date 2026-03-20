@@ -85,6 +85,6 @@ Choose the guide that matches your deployment:
 
 Supporting modules:
 
-- [DNS module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/dns/README.md)
+- `infra-gitops/scripts/dnsmasq/README.md`
 - [HAProxy module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/ha-proxy/README.md)
 - [Controller guide](/home/vagrant/talos-vsphere-lab/overlays/lab/controller/README.md)

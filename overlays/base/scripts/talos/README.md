@@ -73,7 +73,7 @@ documents how to execute the workflow.
 
 ## Related Modules
 
-- [DNS module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/dns/README.md)
+- `infra-gitops/scripts/dnsmasq/README.md`
 - [HAProxy module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/ha-proxy/README.md)
 - [GOVC module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/govc/README.md)
 - [Controller guide](/home/vagrant/talos-vsphere-lab/overlays/lab/controller/README.md)
