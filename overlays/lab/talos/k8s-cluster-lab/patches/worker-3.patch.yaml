@@ -9,4 +9,4 @@ machine:
             gateway: 192.168.0.2
         dhcp: false
     nameservers:
-      - 192.168.0.2
+      - 192.168.0.53

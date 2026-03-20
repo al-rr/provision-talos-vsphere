@@ -21,8 +21,8 @@ spec:
     serviceCIDR: "10.96.0.0/12"
     gateway: "192.168.0.2"
     nameservers:
-      - "192.168.0.2"
-    note: "Lab has no dedicated DNS/NTP service; this is a constrained environment."
+      - "192.168.0.53"
+    note: "Lab DNS is provided by talos-dns-1 (dnsmasq) at 192.168.0.53."
 
   loadBalancer:
     implementation: "HAProxy + Keepalived"
@@ -63,6 +63,18 @@ spec:
     strategy: "Disable Talos default CNI and install Cilium (OCI + Helm 3)"
     talosPatchFile: "overlays/lab/talos/talos/patches/cni.patch.yaml"
     ciliumValuesFile: "overlays/lab/talos/talos/cilium/values.yaml"
+    cilium-custom:
+      kubeProxyReplacement: "true"
+      k8sServiceHost: "192.168.0.30"
+      k8sServicePort: "6443"
+      encryption:
+        enabled: true
+        type: wireguard
+        nodeEncryption: true
+        strictMode:
+          egress:
+            enabled: true
+
 
   controllerPrerequisites:
     tools:
