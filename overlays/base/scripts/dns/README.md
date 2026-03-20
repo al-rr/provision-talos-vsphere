@@ -69,6 +69,6 @@ host1.lab.local=192.168.0.10,host2.lab.local=192.168.0.11
 
 ## Notes
 
-- `provision.sh` is a thin wrapper on top of `overlays/base/scripts/govc/provision_haproxy.sh`.
+- `provision.sh` is a thin wrapper on top of `overlays/base/scripts/ha-proxy/govc/provision.sh`.
 - You can pass extra GOVC flags to `provision.sh` (for example `--mode=clone`, `--template=...`).
 - In standalone ESXi, prefer `--mode=ovf`/`--mode=ova` for deterministic provisioning.

@@ -3,7 +3,7 @@
 lint-sh:
 	bash ./overlays/base/scripts/lint-shell.sh --env=prod
 
-GOVC_PROVISION_SCRIPT := ./overlays/base/scripts/govc/provision_haproxy.sh
+GOVC_PROVISION_SCRIPT := ./overlays/base/scripts/ha-proxy/govc/provision.sh
 GOVC_ENV ?= lab
 GOVC_COUNT ?= 2
 GOVC_PREFIX ?= talos-lb

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# @file provision_talos_single_node.sh
+# @file provision-single-node.sh
 # @brief Provision a non-HA single-node Talos VM on vSphere/ESXi using govc.
 
 ENV_NAME="lab"
@@ -24,7 +24,7 @@ VM_NET_ADAPTER="vmxnet3"
 VM_DISK_CONTROLLER="scsi"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
 
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/overlays/base/scripts/functions.sh"

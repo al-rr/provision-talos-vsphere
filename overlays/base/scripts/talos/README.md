@@ -1,341 +1,88 @@
 # Talos Script Module
 
 ## Purpose
-This module centralizes Talos lifecycle scripts in one place.
 
-It provides:
-- `install.sh`: install/upgrade `talosctl` (idempotent, local or remote)
-- `provision-single-node.sh`: wrapper for single-node Talos provisioning via `govc`
-- `provision-cluster.sh`: wrapper for Talos cluster provisioning via `govc`
-- `cluster-bootstrap.sh`: Day-1 cluster flow (`generate`, `apply`, `bootstrap`, `all`)
-- `configure_load_balancer.sh`: configure HAProxy backend servers for Talos control planes
-- `vars.sh`: module defaults (`TALOSCTL_VERSION`, `TALOSCTL_INSTALL_DIR`)
+This directory contains the operational scripts used to install tooling, provision
+Talos nodes, bootstrap Talos environments, and integrate Talos with the load
+balancer used by the repository.
 
-## Important Prerequisite
+This README is the entrypoint for the module. Detailed execution steps are
+documented in the guides linked below.
 
-`talosctl` **must be compatible with the Talos cluster version**.
+## Scripts In This Module
 
-Recommended practice:
-- keep `talosctl` on the same major/minor as cluster nodes
-- preferably use the same version tag (for example `v1.12.4`)
+| Script                                     | Purpose                                                  | Notes                                                                         |
+| ------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `install.sh`                               | Install or upgrade `talosctl`                            | Local or remote execution                                                     |
+| `provision-single-node.sh`                 | Provision a non-HA Talos node                            | Thin wrapper over `overlays/base/scripts/talos/govc/provision-single-node.sh` |
+| `provision-cluster.sh`                     | Provision a Talos cluster topology                       | Thin wrapper over `overlays/base/scripts/talos/govc/provision-cluster.sh`     |
+| `cluster-bootstrap.sh`                     | Generate configs, apply configs, and bootstrap a cluster | Used after VMs are provisioned                                                |
+| `configure_load_balancer.sh`               | Configure HAProxy backends for Talos control planes      | Reuses the HAProxy module                                                     |
+| `provision_and_configure_load_balancer.sh` | Provision HAProxy nodes and configure Talos backends     | Orchestration wrapper                                                         |
+| `vars.sh`                                  | Module defaults                                          | Loaded from `overlays/base/scripts/vars.sh`                                   |
 
-If versions are not compatible, operations like bootstrap, config apply, and health checks can fail.
+## Execution Model
 
-## Usage
+The Talos module is split into two layers:
 
-Install `talosctl` on controller:
+- Talos operations:
+  - `install.sh`
+  - `cluster-bootstrap.sh`
+  - `configure_load_balancer.sh`
+- VMware provisioning wrappers backed by `govc`:
+  - `provision-single-node.sh`
+  - `provision-cluster.sh`
 
-```bash
-./overlays/base/scripts/talos/install.sh --env=lab
-```
+The provisioning wrappers are intentionally small. They call the implementation in:
 
-Install `talosctl` on a remote host:
+- `overlays/base/scripts/talos/govc/provision-single-node.sh`
+- `overlays/base/scripts/talos/govc/provision-cluster.sh`
 
-```bash
-./overlays/base/scripts/talos/install.sh \
-  --env=lab \
-  --host=192.168.0.10 \
-  --user=vagrant \
-  --ssh-key=/home/vagrant/.ssh/id_ed25519
-```
+This means a user can stay in the Talos module for day-to-day usage, while still
+knowing that VM creation depends on `govc`.
 
-Run single-node provisioning:
+## Required Tools
 
-```bash
-./overlays/base/scripts/talos/provision-single-node.sh --env=lab create
-```
+| Tool       | Required For                                                   | Notes                                                              |
+| ---------- | -------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `talosctl` | Config generation, apply, bootstrap, health checks, kubeconfig | Version should match Talos cluster version                         |
+| `govc`     | Provisioning Talos VMs on ESXi or vSphere                      | Required for `provision-single-node.sh` and `provision-cluster.sh` |
+| `kubectl`  | Cluster validation after bootstrap                             | Usually installed on the controller                                |
+| `helm`     | Post-install add-ons such as Cilium                            | Usually installed on the controller                                |
 
-Run cluster provisioning:
+## Documentation Map
 
-```bash
-./overlays/base/scripts/talos/provision-cluster.sh --env=lab create
-```
+Use the document that matches your goal:
 
-## Day-1 Cluster Flow
+- [GETTING_STARTED.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/GETTING_STARTED.md)
+  - Start here if you are new to the module.
+- [CLUSTER_GUIDE.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/CLUSTER_GUIDE.md)
+  - Use this for a Talos cluster with multiple control planes and workers.
+- [SINGLE_NODE_GUIDE.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/SINGLE_NODE_GUIDE.md)
+  - Use this for a non-HA Talos environment.
+- [INFRASTRUCTURE_PLAN_EXAMPLE.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/INFRASTRUCTURE_PLAN_EXAMPLE.md)
+  - Use this to plan IPs, DNS, VIPs, VM names, and resource roles before execution.
 
-Use `cluster-bootstrap.sh` after VMs are provisioned and reachable on Talos API (`:50000`).
+For cluster-specific intent, continue using:
 
-Generate only:
+- [overlays/lab/talos/talos/README.md](/home/vagrant/talos-vsphere-lab/overlays/lab/talos/talos/README.md)
+- `overlays/lab/talos/talos/cluster-spec.yaml`
 
-```bash
-./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=generate
-```
+These files describe what a specific cluster should look like. This module
+documents how to execute the workflow.
 
-Apply configs only:
+## Related Modules
 
-```bash
-./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=apply
-```
+- [DNS module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/dns/README.md)
+- [HAProxy module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/ha-proxy/README.md)
+- [GOVC module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/govc/README.md)
+- [Controller guide](/home/vagrant/talos-vsphere-lab/overlays/lab/controller/README.md)
 
-Bootstrap only:
+## Recommended Reading Order
 
-```bash
-./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=bootstrap
-```
+For a new Talos cluster:
 
-Full Day-1 sequence:
-
-```bash
-./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=all
-```
-
-Safe simulation:
-
-```bash
-./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=all --dry-run
-```
-
-Enable global patches explicitly (optional):
-
-```bash
-./overlays/base/scripts/talos/cluster-bootstrap.sh \
-  --env=lab \
-  --mode=all \
-  --enable-global-patches
-```
-
-## Create A New Cluster From Scratch
-
-Example to create a brand-new cluster named `talos`:
-
-1. Provision VMs first (control planes/workers) with `provision-cluster.sh` or `govc`.
-2. Run Day-1 flow with a dedicated output directory and explicit node IPs:
-
-```bash
-./overlays/base/scripts/talos/cluster-bootstrap.sh \
-  --env=lab \
-  --mode=all \
-  --cluster-name=talos \
-  --endpoint=https://192.168.0.250:6443 \
-  --generated-dir=overlays/lab/talos/talos/generated \
-  --cp-ips=192.168.0.88,192.168.0.89,192.168.0.90 \
-  --worker-ips=192.168.0.91,192.168.0.92,192.168.0.93
-```
-
-Optional dry-run before applying:
-
-```bash
-./overlays/base/scripts/talos/cluster-bootstrap.sh \
-  --env=lab \
-  --mode=all \
-  --dry-run \
-  --cluster-name=talos \
-  --endpoint=https://192.168.0.250:6443 \
-  --generated-dir=overlays/lab/talos/talos/generated \
-  --cp-ips=192.168.0.88,192.168.0.89,192.168.0.90 \
-  --worker-ips=192.168.0.91,192.168.0.92,192.168.0.93
-```
-
-If you also want shared/global patches for this run, add:
-
-```bash
---enable-global-patches
-```
-
-Global patch directories (optional):
-- `overlays/<env>/talos/patches-available`: candidate patches
-- `overlays/<env>/talos/patches-enabled`: active patches used when enabled
-- Legacy fallback: `overlays/<env>/talos/patches` (if `patches-enabled` does not exist)
-
-Suggested activation flow:
-
-```bash
-mkdir -p overlays/lab/talos/patches-enabled
-cp overlays/lab/talos/patches-available/flannel.patch.yaml overlays/lab/talos/patches-enabled/
-```
-
-Then run with:
-
-```bash
-./overlays/base/scripts/talos/cluster-bootstrap.sh \
-  --env=lab \
-  --mode=all \
-  --enable-global-patches
-```
-
-## Controller Access
-
-Controller-specific setup (`talosctl`, `kubectl`, `~/.talos/config`, and `~/.kube/config`)
-is documented in `overlays/lab/controller/README.md`.
-
-## Boot Source Policy
-
-- Default path is **OVA** (production-ready flow), controlled by `TALOS_OVA_PATH`.
-- ISO is only fallback/testing (`TALOS_ISO_DATASTORE_PATH`) when OVA is not set.
-
-## DNS Strategy For Lab
-
-If your lab network does not provide reliable DNS, use a dedicated DNS VM before Talos bootstrap.
-
-Recommended module:
-- `overlays/base/scripts/dns/provision.sh`
-- `overlays/base/scripts/dns/install.sh`
-- `overlays/base/scripts/dns/setup.sh`
-
-Suggested order:
-1. Provision DNS VM with GOVC.
-2. Install and configure dnsmasq in that VM.
-3. Set Talos and GOVC nameservers to the DNS VM IP (for example in `overlays/base/scripts/govc/vars-esxi-prod.sh`).
-4. Run Talos Day-1 flow (`cluster-bootstrap.sh`).
-
-## Clean Recreate Flow (Cluster)
-
-```bash
-./overlays/base/scripts/talos/provision-cluster.sh --env=lab destroy
-./overlays/base/scripts/talos/provision-cluster.sh --env=lab create
-talosctl --talosconfig overlays/lab/talos/k8s-cluster-lab/talosconfig \
-  --nodes 192.168.0.88 --endpoints 192.168.0.88 bootstrap
-```
-
-## Configure HAProxy Backend For Talos
-
-The script reads:
-- Talos control-plane IPs from `TALOS_CONTROL_PLANE_IPS` (overlay vars),
-- HAProxy targets from `HAPROXY_NODE_1_IP` and `HAPROXY_NODE_2_IP`.
-- optional GOVC profile vars from `--vars-file` (recommended for ESXi production-ready simulation).
-
-Environment model:
-- Vagrant lab: validate script behavior and idempotency.
-- ESXi/GOVC lab: validate production-ready flow and topology.
-
-Apply backend config to both HAProxy nodes:
-
-```bash
-./overlays/base/scripts/talos/configure_load_balancer.sh \
-  --env=lab \
-  --vars-file=overlays/prod/scripts/vars.sh \
-  --user=vagrant \
-  --ssh-key=/path/to/key
-```
-
-Optional:
-- `--cp-ips=192.168.0.88,192.168.0.89,192.168.0.90`
-- `--lb-hosts=172.17.20.181,172.17.20.182`
-
-### Multi-Cluster On Shared HAProxy Pair
-
-If the same HAProxy pair serves more than one Talos cluster, use:
-- one VIP per cluster in Keepalived (`KEEPALIVED_VIPS`)
-- one frontend/backend pair per cluster in HAProxy
-
-Use append mode so existing frontends/backends are preserved:
-
-```bash
-./overlays/base/scripts/talos/configure_load_balancer.sh \
-  --env=lab \
-  --append \
-  --cluster-name=talos \
-  --vip=192.168.0.30 \
-  --cp-ips=192.168.0.61,192.168.0.62,192.168.0.63 \
-  --lb-hosts=192.168.0.55,192.168.0.56 \
-  --user=vagrant \
-  --ssh-key=/path/to/key
-```
-
-Notes:
-- `--append` updates the named frontend/backend if they already exist.
-- Default generated names in append mode are:
-  - frontend: `<cluster-name>_k8s_api`
-  - backend: `<cluster-name>_k8s_api_backend`
-- You can override names with `--frontend-name` and `--backend-name`.
-
-## Post-Bootstrap Operations (Day-2)
-
-After bootstrap, normal operations are usually:
-- patching machine config (single node, many nodes, or all nodes),
-- then validating services/nodes,
-- and later doing controlled upgrades.
-
-Use this talosconfig:
-
-```bash
-TALOSCONFIG=overlays/lab/talos/k8s-cluster-lab/talosconfig
-```
-
-Apply a config patch on a single node:
-
-```bash
-talosctl --talosconfig "${TALOSCONFIG}" \
-  -n 192.168.0.91 \
-  patch machineconfig --patch '{"machine":{"time":{"disabled":true}}}'
-```
-
-Apply the same patch to multiple nodes:
-
-```bash
-talosctl --talosconfig "${TALOSCONFIG}" \
-  -n 192.168.0.91,192.168.0.92 \
-  patch machineconfig --patch '{"machine":{"time":{"disabled":true}}}'
-```
-
-Apply a full machine config file to one node:
-
-```bash
-talosctl --talosconfig "${TALOSCONFIG}" \
-  -n 192.168.0.91 \
-  apply-config --insecure --file overlays/lab/talos/k8s-cluster-lab/worker.yaml
-```
-
-Service and cluster checks:
-
-```bash
-talosctl --talosconfig "${TALOSCONFIG}" -n 192.168.0.91,192.168.0.92 service kubelet
-KUBECONFIG=/home/vagrant/.kube/config kubectl get nodes -o wide
-```
-
-### Upgrade Strategy
-
-Recommended order:
-1. workers first (one by one or small batches),
-2. then control-plane nodes one at a time.
-
-Example (single node):
-
-```bash
-talosctl --talosconfig "${TALOSCONFIG}" \
-  -n 192.168.0.91 \
-  upgrade --image factory.talos.dev/vmware-installer/903b2da78f99adef03cbbd4df6714563823f63218508800751560d3bc3557e40:v1.12.4
-```
-
-Then wait for `Ready` before moving to the next node.
-
-## Scale-Out (Add More Workers)
-
-To add one more worker (example: worker-3 with `192.168.0.93`):
-
-1. Create `overlays/lab/talos/k8s-cluster-lab/patches/worker-3.patch.yaml`:
-
-```yaml
-machine:
-  network:
-    interfaces:
-      - interface: eth0
-        addresses:
-          - 192.168.0.93/24
-        routes:
-          - network: 0.0.0.0/0
-            gateway: 192.168.0.2
-        dhcp: false
-    nameservers:
-      - 192.168.0.2
-```
-
-2. Re-run provisioning for workers only, increasing `--worker-count`:
-
-```bash
-source /tmp/govc-test-vars.sh
-./overlays/base/scripts/govc/provision_talos.sh \
-  --env=lab \
-  --cluster-name=k8s-cluster-lab \
-  --cp-count=0 \
-  --worker-count=3 \
-  --ova-path="https://factory.talos.dev/image/903b2da78f99adef03cbbd4df6714563823f63218508800751560d3bc3557e40/v1.12.4/vmware-amd64.ova" \
-  create
-```
-
-3. Validate worker join:
-
-```bash
-talosctl --talosconfig overlays/lab/talos/k8s-cluster-lab/talosconfig -n 192.168.0.93 version
-KUBECONFIG=/home/vagrant/.kube/config kubectl get nodes -o wide
-```
+1. Read [INFRASTRUCTURE_PLAN_EXAMPLE.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/INFRASTRUCTURE_PLAN_EXAMPLE.md).
+2. Read [GETTING_STARTED.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/GETTING_STARTED.md).
+3. Follow [CLUSTER_GUIDE.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/CLUSTER_GUIDE.md).
+4. Use [overlays/lab/talos/talos/README.md](/home/vagrant/talos-vsphere-lab/overlays/lab/talos/talos/README.md) and `cluster-spec.yaml` for cluster-specific values.

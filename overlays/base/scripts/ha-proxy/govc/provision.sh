@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# @file provision_haproxy.sh
-# @brief Generic GOVC VM provisioner using overlay variables plus CLI overrides.
+# @file provision.sh
+# @brief VMware GOVC provisioner for HAProxy-owned VM workflows.
 # @description
 #   Creates or destroys virtual machines using GOVC. In create mode, it can deploy
 #   from an OVA/OVF artifact, clone from a source VM/template, or create an empty VM,
 #   depending on --mode.
-#   The script is generic and can provision HAProxy, Talos, or any other guest type by changing
-#   prefix/count/template and optional resource settings.
+#   The script provisions VMs for the HAProxy module using VMware GOVC.
+#   Other modules should keep their VMware entrypoints inside their own module
+#   directories instead of calling GOVC provisioning from a shared top-level path.
 #
 # @arg action string Required action: create, destroy, or plan.
 # @arg --env,-e string Overlay environment to load. Defaults to lab.
@@ -34,9 +35,9 @@ set -euo pipefail
 # @flag --help,-h Show usage.
 #
 # @example
-#   ./overlays/base/scripts/govc/provision_haproxy.sh --env=lab --count=3 --prefix=talos-lb --template=ubuntu-template create
+#   ./overlays/base/scripts/ha-proxy/govc/provision.sh --env=lab --count=3 --prefix=talos-lb --template=ubuntu-template create
 # @example
-#   ./overlays/base/scripts/govc/provision_haproxy.sh --env=lab --count=3 --prefix=talos-lb destroy
+#   ./overlays/base/scripts/ha-proxy/govc/provision.sh --env=lab --count=3 --prefix=talos-lb destroy
 
 ENV_NAME="lab"
 ACTION=""
@@ -81,7 +82,7 @@ declare -a VM_STATIC_IP_ARRAY=()
 declare -a VM_NAMESERVER_ARRAY=()
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
 
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/overlays/base/scripts/functions.sh"

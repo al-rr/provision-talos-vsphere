@@ -32,8 +32,9 @@
 - `overlays/prod/scripts/vars.sh` is the default production override file.
 - `overlays/lab/scripts/vars.sh` is the default lab override file.
 - `overlays/lab/scripts/` must contain lab-controller bootstrap assets only.
-- Reusable GOVC helpers such as `overlays/base/govc/provision_haproxy.sh`
-  belong in `overlays/base`.
+- Module-specific VMware provisioning entrypoints belong inside the owning
+  module, such as `overlays/base/scripts/talos/govc/` or
+  `overlays/base/scripts/ha-proxy/govc/`.
 - Use Git Bash as the default interactive terminal for this repository.
 - Run `govc` from the Windows host.
 - Run Ansible from the Vagrant-based lab environment where Ansible is

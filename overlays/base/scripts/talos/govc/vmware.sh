@@ -5,12 +5,12 @@ set -euo pipefail
 # @brief Backward-compatible wrapper for Talos govc provisioning flows.
 # @description
 #   Legacy callers can still use vmware.sh, but the canonical scripts are:
-#   - provision_talos_single.sh
-#   - provision_talos.sh (cluster)
+#   - provision-single.sh
+#   - provision-cluster.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SINGLE_SCRIPT="${SCRIPT_DIR}/provision_talos_single_node.sh"
-CLUSTER_SCRIPT="${SCRIPT_DIR}/provision_talos.sh"
+SINGLE_SCRIPT="${SCRIPT_DIR}/provision-single-node.sh"
+CLUSTER_SCRIPT="${SCRIPT_DIR}/provision-cluster.sh"
 
 usage() {
   cat <<EOF

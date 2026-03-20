@@ -22,6 +22,7 @@ Remote execution requires:
 - `setup.sh`: renders `haproxy.cfg`, applies it, validates, reloads service.
 - `hardening.sh`: applies sysctl profile and firewall rules.
 - `run-full.sh`: provisions two nodes with `govc`, then installs/configures HAProxy and Keepalived.
+- `govc/provision.sh`: VMware-specific provisioning entrypoint for HAProxy VMs.
 - `vars.sh`: module defaults.
 - `templates/haproxy.cfg.tpl`: config template.
 
@@ -135,4 +136,4 @@ Run only configuration steps for already provisioned hosts:
 ## Related Files
 - [base vars loader](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/vars.sh)
 - [keepalived module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/keepalived/README.md)
-- [HAProxy govc provisioning script](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/govc/provision_haproxy.sh)
+- [HAProxy VMware provisioning script](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/ha-proxy/govc/provision.sh)

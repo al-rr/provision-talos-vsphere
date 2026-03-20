@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# @file provision_talos.sh
+# @file provision-cluster.sh
 # @brief Provision Talos control-plane/worker VMs on vSphere/ESXi using govc.
 # @description
 #   Creates or destroys Talos nodes from overlay variables, injects machine configs
@@ -65,7 +65,7 @@ declare -a CP_PATCH_FILES=()
 declare -a WORKER_PATCH_FILES=()
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
 
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/overlays/base/scripts/functions.sh"

@@ -2,7 +2,7 @@
 # @file provision.sh
 # @brief Provision DNS VM(s) on vSphere/ESXi using GOVC defaults.
 # @description
-#   Thin wrapper over the generic GOVC provisioner with DNS-focused defaults.
+#   Thin wrapper over the HAProxy VMware provisioner with DNS-focused defaults.
 #   Supports create, destroy, and plan actions.
 #
 # @arg action string Required action: create, destroy, or plan.
@@ -122,7 +122,7 @@ main() {
   load_context
   apply_dns_defaults_to_govc
 
-  cmd=("${BASE_SCRIPT_DIR}/govc/provision_haproxy.sh" "--env=${ENV_NAME}")
+  cmd=("${BASE_SCRIPT_DIR}/ha-proxy/govc/provision.sh" "--env=${ENV_NAME}")
   if [[ -n "${CUSTOM_VARS_FILE}" ]]; then
     cmd+=("--vars-file=${CUSTOM_VARS_FILE}")
   fi

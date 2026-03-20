@@ -35,7 +35,7 @@ export TALOS_WORKER_IPS="${TALOS_WORKER_IPS:-[\"192.168.0.91\",\"192.168.0.92\"]
 # To switch to dedicated DNS VM after setup, override TALOS_NAMESERVERS with DNS_VM_STATIC_IP.
 export TALOS_NAMESERVERS="${TALOS_NAMESERVERS:-[\"192.168.0.2\"]}"
 
-# GOVC naming defaults used by provision_haproxy.sh
+# GOVC naming defaults used by VMware-backed module provisioners
 export GOVC_VM_NAME_PREFIX="${GOVC_VM_NAME_PREFIX:-talos-lb}"
 export GOVC_VM_COUNT="${GOVC_VM_COUNT:-2}"
 export GOVC_VM_START_INDEX="${GOVC_VM_START_INDEX:-1}"

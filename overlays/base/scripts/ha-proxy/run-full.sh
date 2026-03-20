@@ -30,7 +30,7 @@ REPO_ROOT="$(cd "${BASE_SCRIPT_DIR}/../../.." && pwd)"
 # shellcheck source=/dev/null
 source "${BASE_SCRIPT_DIR}/functions.sh"
 
-GOVC_PROVISION_SCRIPT="${REPO_ROOT}/overlays/base/scripts/govc/provision_haproxy.sh"
+GOVC_PROVISION_SCRIPT="${REPO_ROOT}/overlays/base/scripts/ha-proxy/govc/provision.sh"
 HAPROXY_INSTALL_SCRIPT="${SCRIPT_DIR}/install.sh"
 HAPROXY_SETUP_SCRIPT="${SCRIPT_DIR}/setup.sh"
 KEEPALIVED_INSTALL_SCRIPT="${REPO_ROOT}/overlays/base/scripts/keepalived/install.sh"
