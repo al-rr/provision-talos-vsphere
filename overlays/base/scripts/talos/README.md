@@ -9,6 +9,9 @@ balancer used by the repository.
 This README is the entrypoint for the module. Detailed execution steps are
 documented in the guides linked below.
 
+`install.sh` is a compatibility wrapper and delegates to
+`infra-gitops/scripts/talos/install.sh`.
+
 ## Scripts In This Module
 
 | Script                                     | Purpose                                                  | Notes                                                                         |
@@ -74,6 +77,7 @@ documents how to execute the workflow.
 ## Related Modules
 
 - `infra-gitops/scripts/dnsmasq/README.md`
+- `infra-gitops/scripts/talos/README.md`
 - [HAProxy module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/ha-proxy/README.md)
 - [GOVC module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/govc/README.md)
 - [Controller guide](/home/vagrant/talos-vsphere-lab/overlays/lab/controller/README.md)
