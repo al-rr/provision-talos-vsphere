@@ -22,6 +22,7 @@ SSH_USER=""
 SSH_PORT="22"
 SSH_KEY=""
 SSH_KEY_DIR=""
+INFRA_GITOPS_ROOT="${INFRA_GITOPS_ROOT:-/home/vagrant/infra-gitops}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_SCRIPT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -33,8 +34,8 @@ source "${BASE_SCRIPT_DIR}/functions.sh"
 GOVC_PROVISION_SCRIPT="${REPO_ROOT}/overlays/base/scripts/ha-proxy/govc/provision.sh"
 HAPROXY_INSTALL_SCRIPT="${SCRIPT_DIR}/install.sh"
 HAPROXY_SETUP_SCRIPT="${SCRIPT_DIR}/setup.sh"
-KEEPALIVED_INSTALL_SCRIPT="${REPO_ROOT}/overlays/base/scripts/keepalived/install.sh"
-KEEPALIVED_SETUP_SCRIPT="${REPO_ROOT}/overlays/base/scripts/keepalived/setup.sh"
+KEEPALIVED_INSTALL_SCRIPT="${INFRA_GITOPS_ROOT}/scripts/keepalived/install.sh"
+KEEPALIVED_SETUP_SCRIPT="${INFRA_GITOPS_ROOT}/scripts/keepalived/setup.sh"
 
 NODE_1_NAME=""
 NODE_2_NAME=""
@@ -65,6 +66,7 @@ Options:
       --port=<port>            SSH port for remote configuration (default: 22)
       --ssh-key=<path>         SSH private key used for both nodes
       --ssh-key-dir=<path>     Directory used to auto-discover per-node SSH keys
+      --infra-gitops-root=<p>  Path to infra-gitops repository (default: /home/vagrant/infra-gitops)
       --dry-run                Print actions without applying changes
   -h, --help                   Show this help
 EOF
@@ -133,6 +135,10 @@ parse_args() {
         SSH_KEY_DIR="${1#*=}"
         shift
         ;;
+      --infra-gitops-root=*)
+        INFRA_GITOPS_ROOT="${1#*=}"
+        shift
+        ;;
       --dry-run)
         DRY_RUN="true"
         shift
@@ -173,6 +179,8 @@ validate_args() {
   require_file "${GOVC_PROVISION_SCRIPT}"
   require_file "${HAPROXY_INSTALL_SCRIPT}"
   require_file "${HAPROXY_SETUP_SCRIPT}"
+  KEEPALIVED_INSTALL_SCRIPT="${INFRA_GITOPS_ROOT}/scripts/keepalived/install.sh"
+  KEEPALIVED_SETUP_SCRIPT="${INFRA_GITOPS_ROOT}/scripts/keepalived/setup.sh"
   require_file "${KEEPALIVED_INSTALL_SCRIPT}"
   require_file "${KEEPALIVED_SETUP_SCRIPT}"
 }

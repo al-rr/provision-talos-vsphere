@@ -22,6 +22,7 @@ Remote execution requires:
 - `setup.sh`: renders `haproxy.cfg`, applies it, validates, reloads service.
 - `hardening.sh`: applies sysctl profile and firewall rules.
 - `run-full.sh`: provisions two nodes with `govc`, then installs/configures HAProxy and Keepalived.
+  Keepalived module source is `infra-gitops/scripts/keepalived`.
 - `govc/provision.sh`: VMware-specific provisioning entrypoint for HAProxy VMs.
 - `vars.sh`: module defaults.
 - `templates/haproxy.cfg.tpl`: config template.
@@ -51,7 +52,7 @@ Override these in `overlays/<env>/scripts/vars.sh` when needed.
 - `run-full.sh` flags:
   - `--env`, `--vars-file`, `--count`, `--prefix`, `--mode`, `--overwrite`
   - `--skip-provision`, `--skip-haproxy`, `--skip-keepalived`
-  - `--user`, `--port`, `--ssh-key`, `--ssh-key-dir`, `--dry-run`
+  - `--user`, `--port`, `--ssh-key`, `--ssh-key-dir`, `--infra-gitops-root`, `--dry-run`
 
 ## Full Flow
 `run-full.sh` is the reusable entrypoint for the complete HAProxy HA workflow:
@@ -135,5 +136,5 @@ Run only configuration steps for already provisioned hosts:
 
 ## Related Files
 - [base vars loader](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/vars.sh)
-- [keepalived module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/keepalived/README.md)
+- [keepalived module](/home/vagrant/infra-gitops/scripts/keepalived/README.md)
 - [HAProxy VMware provisioning script](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/ha-proxy/govc/provision.sh)

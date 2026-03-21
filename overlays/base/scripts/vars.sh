@@ -98,13 +98,24 @@ if [[ -f "${HAPROXY_SCRIPT_DIR}/vars.sh" ]]; then
 fi
 unset HAPROXY_SCRIPT_DIR
 
-# Keepalived lifecycle variables (install/setup)
-KEEPALIVED_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/keepalived" >/dev/null 2>&1 && pwd)"
-if [[ -f "${KEEPALIVED_SCRIPT_DIR}/vars.sh" ]]; then
-  # shellcheck disable=SC1090
-  source "${KEEPALIVED_SCRIPT_DIR}/vars.sh"
-fi
-unset KEEPALIVED_SCRIPT_DIR
+# Keepalived lifecycle defaults (module migrated to infra-gitops/scripts/keepalived)
+export KEEPALIVED_SERVICE_NAME="keepalived"
+export KEEPALIVED_CONFIG_PATH="/etc/keepalived/keepalived.conf"
+export KEEPALIVED_INTERFACE="auto"
+export KEEPALIVED_ROUTER_ID="51"
+export KEEPALIVED_STATE="BACKUP"
+export KEEPALIVED_PRIORITY="100"
+export KEEPALIVED_ADVERT_INT="1"
+export KEEPALIVED_AUTH_TYPE="PASS"
+export KEEPALIVED_AUTH_PASS="vrrp1234"
+export KEEPALIVED_VIPS="172.17.20.90/24"
+export KEEPALIVED_UNICAST_SRC_IP=""
+export KEEPALIVED_UNICAST_PEERS="172.17.20.181,172.17.20.182"
+export KEEPALIVED_TRACK_HAPROXY="true"
+export KEEPALIVED_TRACK_SCRIPT_NAME="chk_haproxy"
+export KEEPALIVED_TRACK_SCRIPT_COMMAND="systemctl is-active --quiet haproxy"
+export KEEPALIVED_TRACK_SCRIPT_INTERVAL="2"
+export KEEPALIVED_TRACK_SCRIPT_WEIGHT="-20"
 
 # Talos lifecycle variables (talosctl install/provision wrappers)
 TALOS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/talos" >/dev/null 2>&1 && pwd)"
