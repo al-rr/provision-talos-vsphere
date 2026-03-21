@@ -17,7 +17,8 @@ Este diretório concentra os fluxos de build de imagens para laboratório.
 Instalar `govc` pelo script do repositório:
 
 ```bash
-./overlays/base/scripts/govc/install.sh
+cd /home/vagrant/infra-gitops
+./scripts/govc/install.sh
 ```
 
 ## Passo Importante: Preparar Ambiente (source)

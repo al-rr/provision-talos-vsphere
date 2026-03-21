@@ -2,8 +2,8 @@
 
 ## Purpose
 
-This directory is reserved for the `govc` tool itself and for shared VMware
-connection profiles used by other modules.
+This directory stores shared VMware connection profiles used by other modules.
+The reusable `govc` installer module lives in `infra-gitops/scripts/govc/`.
 
 This module is not the owner of Talos, HAProxy, or DNS provisioning flows.
 When a provisioning workflow belongs to a specific module, the entrypoint should
@@ -16,31 +16,30 @@ live inside that module, for example:
 
 | File | Purpose |
 | --- | --- |
-| `install.sh` | Install `govc` in an idempotent way |
 | `vars.sh` | Shared default variables for `govc` automation |
 | `vars-esxi-prod.sh` | ESXi-focused variable profile used by VMware-backed modules |
 
 ## What Belongs Here
 
-Keep only `govc`-specific assets in this module:
+Keep only project-specific VMware profiles in this module:
 
-- `govc` installation
 - VMware connection defaults
 - shared `govc` variable profiles
 
 Do not keep workload-owned provisioning entrypoints here. Those should stay with
 the owning module so the module remains cohesive.
 
-## Install GOVC
+## Install GOVC (Reusable Module)
 
 ```bash
-./overlays/base/scripts/govc/install.sh
+cd /home/vagrant/infra-gitops
+./scripts/govc/install.sh
 ```
 
 Optional version pin:
 
 ```bash
-./overlays/base/scripts/govc/install.sh --version=v0.52.0
+./scripts/govc/install.sh --version=v0.52.0
 ```
 
 ## Variable Profiles

@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # @describe Install baseline dependencies for the lab controller.
-# @description Installs `make` (package manager) and `govc` (via base installer), idempotently.
+# @description Installs `make` (package manager) and `govc` (via infra-gitops installer), idempotently.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
-GOVC_INSTALL_SCRIPT="${REPO_ROOT}/overlays/base/scripts/govc/install.sh"
+INFRA_GITOPS_ROOT="${INFRA_GITOPS_ROOT:-${REPO_ROOT}/../infra-gitops}"
+GOVC_INSTALL_SCRIPT="${INFRA_GITOPS_ROOT}/scripts/govc/install.sh"
 
 install_make() {
   if command -v make >/dev/null 2>&1; then
