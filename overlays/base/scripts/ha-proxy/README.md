@@ -9,6 +9,9 @@ It provides:
 - host hardening for HAProxy ports and sysctl (`hardening.sh`)
 - full HA orchestration (`run-full.sh`)
 
+The lifecycle scripts (`install.sh`, `setup.sh`, `hardening.sh`) are compatibility
+wrappers and delegate execution to `infra-gitops/scripts/ha-proxy/`.
+
 ## Supported Platforms
 - Debian/Ubuntu (`apt`)
 - RHEL/Oracle Linux/Rocky/Alma (`dnf`/`yum`)
@@ -136,5 +139,6 @@ Run only configuration steps for already provisioned hosts:
 
 ## Related Files
 - [base vars loader](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/vars.sh)
+- [ha-proxy module](/home/vagrant/infra-gitops/scripts/ha-proxy/README.md)
 - [keepalived module](/home/vagrant/infra-gitops/scripts/keepalived/README.md)
 - [HAProxy VMware provisioning script](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/ha-proxy/govc/provision.sh)
