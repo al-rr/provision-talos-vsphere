@@ -45,6 +45,15 @@ Use that split to decide ownership:
 - `overlays/lab` defines local validation assets and lab-controller support.
 - `overlays/prod` defines production-specific values, topology, and patches.
 
+This repository also has an important transitional role:
+
+- it is currently the integrated working space where reusable modules are tested
+  against real scenarios
+- over time, reusable scripts and module logic are expected to move into
+  `infra-gitops`
+- this repository should increasingly retain scenario-specific deployment
+  intent, environment values, overlays, topology, patches, and validation data
+
 The canonical variable load order is:
 
 1. `overlays/base/scripts/vars.sh`
@@ -116,3 +125,16 @@ This repository borrows organizational ideas from shared automation projects
 such as `infra-gitops`, but copied generic standards are not maintained here as
 source of truth. Only repository-local files and policies define the active
 contract for this project.
+
+The intended steady-state split is:
+
+- `infra-gitops` owns reusable scripts, reusable module documentation, and
+  shared automation behavior
+- this repository owns the deployed-project view: architecture, cluster plans,
+  environment overlays, variable values, node counts, patch sets, and lab or
+  ESXi validation scenarios
+
+When documenting work, choose the document type accordingly:
+
+- module guide: explains how a reusable module works
+- deployment plan: explains how a specific environment or cluster is designed
