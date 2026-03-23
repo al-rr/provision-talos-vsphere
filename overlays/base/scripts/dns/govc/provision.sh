@@ -40,6 +40,8 @@ set -euo pipefail
 ENV_NAME="lab"
 ACTION=""
 CUSTOM_VARS_FILE=""
+SELECTED_VARS_FILE=""
+SHOW_VALUES="false"
 VM_COUNT=""
 VM_PREFIX=""
 VM_START_INDEX=""
@@ -115,6 +117,7 @@ Options:
       --overwrite              Destroy VM with same name before create
       --auto-fallback-empty    In mode=auto, fallback to empty VM if all sources fail
       --no-auto-fallback-empty In mode=auto, do not fallback to empty (default)
+      --show-values            Print selected project vars and resolved values, then exit
   -h, --help                   Show this help
 EOF_USAGE
 }
@@ -229,6 +232,10 @@ parse_args() {
         VM_AUTO_FALLBACK_EMPTY="false"
         shift
         ;;
+      --show-values)
+        SHOW_VALUES="true"
+        shift
+        ;;
       create|destroy|plan)
         ACTION="$1"
         shift
@@ -271,13 +278,18 @@ is_ipv4() {
 }
 
 validate_base_inputs() {
-  [[ -n "${ACTION}" ]] || die "Action is required: create, destroy, or plan."
+  if [[ "${SHOW_VALUES}" == "false" ]]; then
+    [[ -n "${ACTION}" ]] || die "Action is required: create, destroy, or plan."
+  fi
   [[ -n "${ENV_NAME}" ]] || die "--env cannot be empty."
 
-  command -v govc >/dev/null 2>&1 || die "govc is not installed or not in PATH."
+  if [[ "${SHOW_VALUES}" == "false" ]]; then
+    command -v govc >/dev/null 2>&1 || die "govc is not installed or not in PATH."
+  fi
 }
 
 load_context() {
+  SELECTED_VARS_FILE="${REPO_ROOT}/overlays/${ENV_NAME}/scripts/vars.sh"
   load_overlay_vars "${ENV_NAME}"
   export_common_tool_env
 
@@ -286,9 +298,55 @@ load_context() {
       CUSTOM_VARS_FILE="${REPO_ROOT}/${CUSTOM_VARS_FILE}"
     fi
     require_file "${CUSTOM_VARS_FILE}"
+    SELECTED_VARS_FILE="${CUSTOM_VARS_FILE}"
     # shellcheck disable=SC1090
     source "${CUSTOM_VARS_FILE}"
   fi
+}
+
+print_var_line() {
+  local key="$1"
+  local value="${2:-}"
+  if [[ "${key}" =~ (PASSWORD|PASS|TOKEN|SECRET|PRIVATE_KEY|_KEY$) ]] && [[ -n "${value}" ]]; then
+    value="***"
+  fi
+  printf '%s=%s\n' "${key}" "${value}"
+}
+
+print_selected_vars() {
+  local vars_file="$1"
+  local var_name
+  [[ -f "${vars_file}" ]] || return 0
+  log_info "Project vars from: ${vars_file}"
+  while IFS= read -r var_name; do
+    [[ -n "${var_name}" ]] || continue
+    # shellcheck disable=SC2154
+    print_var_line "${var_name}" "${!var_name:-}"
+  done < <(awk 'match($0,/^export[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)=/,m){print m[1]}' "${vars_file}")
+}
+
+print_show_values() {
+  log_info "Showing effective DNS provisioning values for env='${ENV_NAME}'"
+  print_selected_vars "${SELECTED_VARS_FILE}"
+  log_info "Resolved provisioning settings:"
+  print_var_line "DNS_ACTION" "${ACTION:-plan}"
+  print_var_line "DNS_VM_COUNT" "${VM_COUNT}"
+  print_var_line "DNS_VM_PREFIX" "${VM_PREFIX}"
+  print_var_line "DNS_VM_START_INDEX" "${VM_START_INDEX}"
+  print_var_line "DNS_VM_MODE" "${VM_MODE}"
+  print_var_line "DNS_VM_CREATE_STRATEGY" "${VM_CREATE_STRATEGY:-n/a}"
+  print_var_line "DNS_VM_SOURCE_KIND" "${VM_SOURCE_KIND:-n/a}"
+  print_var_line "DNS_VM_SOURCE_PATH" "${VM_SOURCE_PATH:-${VM_TEMPLATE_NAME:-n/a}}"
+  print_var_line "DNS_VM_CPUS" "${VM_CPUS}"
+  print_var_line "DNS_VM_MEMORY_MB" "${VM_MEMORY_MB}"
+  print_var_line "DNS_VM_DISK_GB" "${VM_DISK_GB}"
+  print_var_line "DNS_VM_NETWORK" "${VM_NETWORK:-}"
+  print_var_line "DNS_VM_DATASTORE" "${VM_DATASTORE:-}"
+  print_var_line "DNS_VM_GATEWAY" "${VM_GATEWAY:-}"
+  print_var_line "DNS_VM_NETMASK_PREFIX" "${VM_NETMASK_PREFIX:-}"
+  print_var_line "DNS_VM_STATIC_INTERFACE" "${VM_STATIC_INTERFACE:-}"
+  print_var_line "DNS_VM_GUEST_USERNAME" "${VM_GUEST_USERNAME:-}"
+  print_var_line "DNS_VM_GUEST_PASSWORD" "${VM_GUEST_PASSWORD:-}"
 }
 
 resolve_settings() {
@@ -905,9 +963,18 @@ execute_action() {
 
 main() {
   parse_args "$@"
+  if [[ "${SHOW_VALUES}" == "true" && -z "${ACTION}" ]]; then
+    ACTION="plan"
+  fi
   validate_base_inputs
   load_context
   resolve_settings
+
+  if [[ "${SHOW_VALUES}" == "true" ]]; then
+    print_show_values
+    return 0
+  fi
+
   validate_resolved_settings
   resolve_create_strategy
 

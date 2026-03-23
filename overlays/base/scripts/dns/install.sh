@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# @file setup.sh
-# @brief DNS setup wrapper for dnsmasq reusable module.
+# @file install.sh
+# @brief DNS install wrapper for dnsmasq reusable module.
 # @description
-#   Delegates configuration rendering/apply to infra-gitops/scripts/dnsmasq/setup.sh,
+#   Delegates package/service installation to infra-gitops/scripts/dnsmasq/install.sh,
 #   auto-resolving env vars and remote target defaults.
 
 set -euo pipefail
 
 usage() {
   cat <<'EOF_USAGE'
-Usage: setup.sh [dnsmasq setup options]
+Usage: install.sh [dnsmasq install options]
 
 Options:
   --env=<name>        Overlay environment name (default: lab)
@@ -21,8 +21,6 @@ Options:
   --show-values       Print selected project vars and resolved target values, then exit
   --dry-run, -n       Forward dry-run to target script
   --help, -h          Show help
-
-All other arguments are forwarded to dnsmasq setup.sh.
 EOF_USAGE
 }
 
@@ -49,7 +47,7 @@ print_selected_vars() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 DNSMASQ_DIR="${REPO_ROOT}/../infra-gitops/scripts/dnsmasq"
-DNSMASQ_SETUP="${DNSMASQ_DIR}/setup.sh"
+DNSMASQ_INSTALL="${DNSMASQ_DIR}/install.sh"
 
 ENV_NAME="lab"
 EXPLICIT_VARS_FILE=""
@@ -60,10 +58,10 @@ HAS_USER_ARG="false"
 HAS_PORT_ARG="false"
 HAS_SSH_KEY_ARG="false"
 
-SETUP_ARGS=()
+INSTALL_ARGS=()
 
-if [[ ! -x "${DNSMASQ_SETUP}" ]]; then
-  echo "[ERROR] Missing dnsmasq setup script: ${DNSMASQ_SETUP}" >&2
+if [[ ! -x "${DNSMASQ_INSTALL}" ]]; then
+  echo "[ERROR] Missing dnsmasq install script: ${DNSMASQ_INSTALL}" >&2
   echo "[ERROR] Ensure infra-gitops is available at: ${REPO_ROOT}/../infra-gitops" >&2
   exit 1
 fi
@@ -71,15 +69,15 @@ fi
 for arg in "$@"; do
   case "${arg}" in
     --env=*) ENV_NAME="${arg#*=}" ;;
-    --vars-file=*) EXPLICIT_VARS_FILE="${arg#*=}"; SETUP_ARGS+=("${arg}") ;;
-    --host=*) HAS_HOST_ARG="true"; SETUP_ARGS+=("${arg}") ;;
-    --user=*) HAS_USER_ARG="true"; SETUP_ARGS+=("${arg}") ;;
-    --port=*) HAS_PORT_ARG="true"; SETUP_ARGS+=("${arg}") ;;
-    --ssh-key=*) HAS_SSH_KEY_ARG="true"; SETUP_ARGS+=("${arg}") ;;
+    --vars-file=*) EXPLICIT_VARS_FILE="${arg#*=}"; INSTALL_ARGS+=("${arg}") ;;
+    --host=*) HAS_HOST_ARG="true"; INSTALL_ARGS+=("${arg}") ;;
+    --user=*) HAS_USER_ARG="true"; INSTALL_ARGS+=("${arg}") ;;
+    --port=*) HAS_PORT_ARG="true"; INSTALL_ARGS+=("${arg}") ;;
+    --ssh-key=*) HAS_SSH_KEY_ARG="true"; INSTALL_ARGS+=("${arg}") ;;
     --show-values) SHOW_VALUES="true" ;;
-    -n|--dry-run) SETUP_ARGS+=("${arg}") ;;
+    -n|--dry-run) INSTALL_ARGS+=("${arg}") ;;
     -h|--help) usage; exit 0 ;;
-    *) SETUP_ARGS+=("${arg}") ;;
+    *) INSTALL_ARGS+=("${arg}") ;;
   esac
 done
 
@@ -105,28 +103,28 @@ if [[ "${HAS_HOST_ARG}" == "false" ]]; then
     echo "[ERROR] Set DNS_VM_STATIC_IP in overlays/${ENV_NAME}/scripts/vars.sh or pass --host=..." >&2
     exit 1
   fi
-  SETUP_ARGS+=("--host=${AUTO_HOST}")
+  INSTALL_ARGS+=("--host=${AUTO_HOST}")
 fi
 
 if [[ "${HAS_USER_ARG}" == "false" ]]; then
   AUTO_USER="${DNS_SSH_USER:-${ANSIBLE_USERNAME:-${SSH_USER:-${BUILD_USERNAME:-}}}}"
-  [[ -n "${AUTO_USER}" ]] && SETUP_ARGS+=("--user=${AUTO_USER}")
+  [[ -n "${AUTO_USER}" ]] && INSTALL_ARGS+=("--user=${AUTO_USER}")
 fi
 
 if [[ "${HAS_PORT_ARG}" == "false" ]]; then
   AUTO_PORT="${DNS_SSH_PORT:-${SSH_PORT:-22}}"
-  SETUP_ARGS+=("--port=${AUTO_PORT}")
+  INSTALL_ARGS+=("--port=${AUTO_PORT}")
 fi
 
 if [[ "${HAS_SSH_KEY_ARG}" == "false" ]]; then
   AUTO_SSH_KEY="${DNS_SSH_KEY:-${ANSIBLE_PRIVATE_KEY_FILE:-${SSH_PRIVATE_KEY_FILE:-}}}"
-  [[ -n "${AUTO_SSH_KEY}" ]] && SETUP_ARGS+=("--ssh-key=${AUTO_SSH_KEY}")
+  [[ -n "${AUTO_SSH_KEY}" ]] && INSTALL_ARGS+=("--ssh-key=${AUTO_SSH_KEY}")
 fi
 
 if [[ "${SHOW_VALUES}" == "true" ]]; then
   echo "[INFO] env=${ENV_NAME}"
   print_selected_vars "${SELECTED_VARS_FILE}"
-  echo "[INFO] Resolved setup target:"
+  echo "[INFO] Resolved install target:"
   print_var_line "DNS_TARGET_HOST" "${AUTO_HOST:-<from-cli>}"
   print_var_line "DNS_TARGET_USER" "${AUTO_USER:-<from-cli>}"
   print_var_line "DNS_TARGET_PORT" "${AUTO_PORT:-<from-cli>}"
@@ -134,4 +132,4 @@ if [[ "${SHOW_VALUES}" == "true" ]]; then
   exit 0
 fi
 
-exec "${DNSMASQ_SETUP}" "${SETUP_ARGS[@]}"
+exec "${DNSMASQ_INSTALL}" "${INSTALL_ARGS[@]}"

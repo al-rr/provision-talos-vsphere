@@ -6,13 +6,15 @@ This module owns DNS VM lifecycle for VMware (`govc`) and DNS service defaults u
 
 This module does not own dnsmasq implementation logic. Service lifecycle is handled
 by the reusable module in `infra-gitops/scripts/dnsmasq`.
-`setup.sh` is only a thin wrapper for operator convenience.
+`install.sh` and `setup.sh` are thin wrappers for operator convenience.
 
 ## Scripts
 
 - `provision.sh`: compatibility entrypoint (delegates to `dns/govc/provision.sh`)
 - `govc/provision.sh`: DNS VM provisioning on ESXi/vSphere (`create|destroy|plan`)
-- `setup.sh`: compatibility wrapper for `../infra-gitops/scripts/dnsmasq/install.sh` + `setup.sh`
+- `install.sh`: compatibility wrapper for `../infra-gitops/scripts/dnsmasq/install.sh`
+- `setup.sh`: compatibility wrapper for `../infra-gitops/scripts/dnsmasq/setup.sh`
+- `run-full.sh`: orchestration wrapper (`provision -> install -> setup`)
 - `vars.sh`: DNS module defaults (`DNS_VM_*`, `DNS_*`)
 
 ## Scope Boundary
@@ -38,7 +40,14 @@ Example with lab profile:
   create
 ```
 
-Example dnsmasq setup (delegated wrapper, install + setup):
+Install dnsmasq on DNS host:
+
+```bash
+./overlays/base/scripts/dns/install.sh \
+  --env=lab
+```
+
+Apply dnsmasq configuration:
 
 ```bash
 ./overlays/base/scripts/dns/setup.sh \
@@ -51,6 +60,20 @@ Optional hosts file (if you prefer file-based records instead of `DNS_A_RECORDS`
 ./overlays/base/scripts/dns/setup.sh \
   --env=lab \
   --hosts-file=overlays/lab/scripts/dnsmasq.hosts
+```
+
+Full bootstrap flow:
+
+```bash
+./overlays/base/scripts/dns/run-full.sh --env=lab
+```
+
+Show values only (no execution):
+
+```bash
+./overlays/base/scripts/dns/govc/provision.sh --env=lab --show-values
+./overlays/base/scripts/dns/install.sh --env=lab --show-values
+./overlays/base/scripts/dns/setup.sh --env=lab --show-values
 ```
 
 Wrapper resolution model:
