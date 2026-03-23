@@ -22,7 +22,7 @@ export OVERLAY_ENV="lab"
 # Environment anchors (override values only).
 export NETWORK_GATEWAY="192.168.0.2"
 export NETWORK_NETMASK_PREFIX="24"
-export NETWORK_NAMESERVERS='["192.168.0.53"]'
+export NETWORK_NAMESERVERS='["192.168.0.2"]'
 export VM_STATIC_INTERFACE="ens160"
 
 # Build/guest account in lab (used by Packer and GOVC in-guest steps).
@@ -86,6 +86,7 @@ export TALOS_CONTROL_PLANE_COUNT="3"
 export TALOS_WORKER_COUNT="3"
 export TALOS_CONTROL_PLANE_IPS='["192.168.0.61","192.168.0.62","192.168.0.63"]'
 export TALOS_WORKER_IPS='["192.168.0.71","192.168.0.72","192.168.0.73"]'
+export TALOS_DISABLE_DEFAULT_CNI="true"
 export TALOS_CONTROL_PLANE_NAME_PREFIX="talos-cp"
 export TALOS_WORKER_NAME_PREFIX="talos-worker"
 export TALOS_NODE_INTERFACE="eth0"

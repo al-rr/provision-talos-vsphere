@@ -15,6 +15,8 @@
 # @arg --cp-ips string Control-plane IP list (CSV/JSON-like).
 # @arg --worker-ips string Worker IP list (CSV/JSON-like).
 # @arg --bootstrap-node string Control-plane IP used for bootstrap.
+# @flag --disable-default-cni Disable Talos default CNI/kube-proxy using cni.patch.yaml.
+# @flag --enable-default-cni Keep Talos default CNI/kube-proxy (default).
 # @flag --skip-lb-config Disable automatic HAProxy Talos backend/frontend reconciliation.
 # @arg --validate-timeout-seconds int Seconds to wait for kube-api readiness via VIP.
 # @arg --validate-interval-seconds int Interval between kube-api readiness checks.
@@ -47,6 +49,8 @@ VALIDATE_POST_BOOTSTRAP="true"
 VALIDATE_TIMEOUT_SECONDS="180"
 VALIDATE_INTERVAL_SECONDS="5"
 GLOBAL_PATCHES_DIR=""
+DISABLE_DEFAULT_CNI=""
+CNI_PATCH_FILE=""
 
 declare -a CP_IPS=()
 declare -a WORKER_IPS=()
@@ -64,6 +68,8 @@ Options:
   --cp-ips=<csv>              Control-plane IP list
   --worker-ips=<csv>          Worker IP list
   --bootstrap-node=<ip>       Bootstrap control-plane node IP (default: first cp ip)
+  --disable-default-cni       Disable default Talos CNI/kube-proxy via cni.patch.yaml
+  --enable-default-cni        Keep default Talos CNI/kube-proxy (default)
   --skip-lb-config            Skip automatic Talos HAProxy reconciliation
   --validate-timeout-seconds=<seconds>
                               Wait timeout for kube-api readiness via VIP (default: 180)
@@ -92,6 +98,8 @@ parse_args() {
       --cp-ips=*) CP_IPS_RAW="${1#*=}"; shift ;;
       --worker-ips=*) WORKER_IPS_RAW="${1#*=}"; shift ;;
       --bootstrap-node=*) BOOTSTRAP_NODE="${1#*=}"; shift ;;
+      --disable-default-cni) DISABLE_DEFAULT_CNI="true"; shift ;;
+      --enable-default-cni) DISABLE_DEFAULT_CNI="false"; shift ;;
       --skip-lb-config) AUTO_CONFIGURE_LB="false"; shift ;;
       --validate-timeout-seconds=*) VALIDATE_TIMEOUT_SECONDS="${1#*=}"; shift ;;
       --validate-interval-seconds=*) VALIDATE_INTERVAL_SECONDS="${1#*=}"; shift ;;
@@ -192,6 +200,16 @@ endpoint_port() {
   else
     printf '6443\n'
   fi
+}
+
+normalize_bool() {
+  local value="${1:-}"
+  value="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]')"
+  case "${value}" in
+    1|true|yes|on) printf 'true\n' ;;
+    0|false|no|off|"") printf 'false\n' ;;
+    *) die "Invalid boolean value: ${1}" ;;
+  esac
 }
 
 run_or_echo() {
@@ -321,6 +339,7 @@ build_generate_patch_args() {
     [[ -f "${global_patches_dir}/${common_alias}" ]] && args+=("--config-patch-${kind}" "@${global_patches_dir}/${common_alias}")
   fi
 
+  [[ -n "${CNI_PATCH_FILE}" ]] && args+=("--config-patch-${kind}" "@${CNI_PATCH_FILE}")
   [[ -f "${cluster_patches_dir}/dns.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/dns.patch.yaml")
   [[ -f "${cluster_patches_dir}/${kind}-common.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/${kind}-common.patch.yaml")
   [[ -f "${cluster_patches_dir}/${common_alias}" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/${common_alias}")
@@ -354,6 +373,7 @@ patch_for_node() {
     [[ -f "${global_patches_dir}/${kind}-${index}.patch.yaml" ]] && chain+=("${global_patches_dir}/${kind}-${index}.patch.yaml")
   fi
 
+  [[ -n "${CNI_PATCH_FILE}" ]] && chain+=("${CNI_PATCH_FILE}")
   [[ -f "${cluster_patches_dir}/dns.patch.yaml" ]] && chain+=("${cluster_patches_dir}/dns.patch.yaml")
   [[ -f "${cluster_patches_dir}/${kind}-common.patch.yaml" ]] && chain+=("${cluster_patches_dir}/${kind}-common.patch.yaml")
   if [[ "${kind}" == "controlplane" ]]; then
@@ -661,6 +681,10 @@ main() {
   (( ${#CP_IPS[@]} > 0 )) || die "Control-plane IPs are empty."
 
   BOOTSTRAP_NODE="${BOOTSTRAP_NODE:-${CP_IPS[0]}}"
+  if [[ -z "${DISABLE_DEFAULT_CNI}" ]]; then
+    DISABLE_DEFAULT_CNI="${TALOS_DISABLE_DEFAULT_CNI:-false}"
+  fi
+  DISABLE_DEFAULT_CNI="$(normalize_bool "${DISABLE_DEFAULT_CNI}")"
 
   global_patches_available_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/patches-available")"
   global_patches_enabled_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/patches-enabled")"
@@ -690,8 +714,22 @@ main() {
   fi
 
   [[ -d "${cluster_patches_dir}" ]] || log_warn "Cluster patches directory not found: ${cluster_patches_dir}. Proceeding without cluster patches."
+  CNI_PATCH_FILE=""
+  if [[ "${DISABLE_DEFAULT_CNI}" == "true" ]]; then
+    if [[ -f "${cluster_patches_dir}/cni.patch.yaml" ]]; then
+      CNI_PATCH_FILE="${cluster_patches_dir}/cni.patch.yaml"
+    elif [[ -n "${global_patches_dir}" && -f "${global_patches_dir}/cni.patch.yaml" ]]; then
+      CNI_PATCH_FILE="${global_patches_dir}/cni.patch.yaml"
+    fi
+    [[ -n "${CNI_PATCH_FILE}" ]] || die "TALOS_DISABLE_DEFAULT_CNI=true but cni.patch.yaml was not found."
+  fi
   render_node_network_patches "${cluster_patches_dir}"
   log_info "Rendered per-node network patches from overlay vars in: ${cluster_patches_dir}"
+  if [[ "${DISABLE_DEFAULT_CNI}" == "true" ]]; then
+    log_info "Default Talos CNI/kube-proxy disable: enabled (${CNI_PATCH_FILE})"
+  else
+    log_info "Default Talos CNI/kube-proxy disable: disabled"
+  fi
   if [[ "${USE_GLOBAL_PATCHES}" == "true" ]]; then
     log_info "Global patches mode: enabled"
     log_info "Using global patches directory: ${global_patches_dir}"

@@ -120,6 +120,13 @@ Use explicit arguments when creating a brand-new cluster:
   --worker-ips=<worker1-ip>,<worker2-ip>,<worker3-ip>
 ```
 
+Optional CNI mode controls:
+
+- Keep Talos default CNI/kube-proxy (default): no extra flag.
+- Disable Talos default CNI/kube-proxy (for Cilium): `--disable-default-cni`
+- Re-enable explicitly: `--enable-default-cni`
+- Overlay variable: `TALOS_DISABLE_DEFAULT_CNI=true|false`
+
 Use [INFRASTRUCTURE_PLAN_EXAMPLE.md](INFRASTRUCTURE_PLAN_EXAMPLE.md) for a concrete sample,
 and keep your real environment values in your overlay workspace (for example
 `overlays/lab/talos/talos/cluster-spec.yaml`).
@@ -159,6 +166,7 @@ Important note:
 - `cluster-bootstrap.sh` now reconciles the Talos HAProxy frontend/backend automatically for this cluster.
 - It updates only the cluster-specific frontend/backend block (idempotent) and keeps unrelated HAProxy entries untouched.
 - Use `--skip-lb-config` only when you explicitly want to manage HAProxy manually.
+- CNI disable patch (`cni.patch.yaml`) is applied only when `TALOS_DISABLE_DEFAULT_CNI=true` or `--disable-default-cni` is used.
 - After bootstrap, it validates kube-api readiness through the cluster endpoint VIP.
 - Tune validation with `--validate-timeout-seconds=<seconds>` and `--validate-interval-seconds=<seconds>`.
 - Use `--skip-post-validate` only when you intentionally want to skip this final health gate.
