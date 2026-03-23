@@ -77,6 +77,10 @@ VM_GUEST_USERNAME=""
 VM_GUEST_PASSWORD=""
 VM_ENFORCE_GUEST_STATIC_NETWORK=""
 VM_APPLY_GUEST_STATIC_NETWORK="false"
+VM_CLOUDINIT_PUBLIC_KEY=""
+VM_CLOUDINIT_PASSWORD=""
+DRY_RUN="false"
+SHOW_VALUES="false"
 
 declare -a VM_STATIC_IP_ARRAY=()
 declare -a VM_NAMESERVER_ARRAY=()
@@ -112,6 +116,8 @@ Options:
       --guest-user=<name>      Guest OS username for in-guest static network enforcement
       --guest-pass=<pass>      Guest OS password for in-guest static network enforcement
       --guest-static=<mode>    auto | true | false (default: auto)
+      --dry-run                Print plan and exit without changing VMware
+      --show-values            Print selected vars loaded from vars file and exit
       --power-on               Power on after create
       --no-power-on            Do not power on after create
       --overwrite              Destroy VM with same name before create
@@ -209,6 +215,14 @@ parse_args() {
         VM_ENFORCE_GUEST_STATIC_NETWORK="${1#*=}"
         shift
         ;;
+      --dry-run)
+        DRY_RUN="true"
+        shift
+        ;;
+      --show-values)
+        SHOW_VALUES="true"
+        shift
+        ;;
       --power-on)
         VM_POWER_ON="true"
         VM_POWER_ON_EXPLICIT="true"
@@ -264,6 +278,26 @@ parse_list_to_array() {
     | awk 'NF'
 }
 
+print_var_line() {
+  local key="$1"
+  local value="${2:-}"
+  if [[ "${key}" =~ (PASSWORD|PASS|TOKEN|SECRET|PRIVATE_KEY|_KEY$) ]] && [[ -n "${value}" ]]; then
+    value="***"
+  fi
+  printf '%s=%s\n' "${key}" "${value}"
+}
+
+print_selected_vars() {
+  local vars_file="$1"
+  local var_name
+  echo "[INFO] Project vars from: ${vars_file}"
+  while IFS= read -r var_name; do
+    [[ -n "${var_name}" ]] || continue
+    # shellcheck disable=SC2154
+    print_var_line "${var_name}" "${!var_name:-}"
+  done < <(awk 'match($0,/^export[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)=/,m){print m[1]}' "${vars_file}")
+}
+
 is_ipv4() {
   local ip="$1"
   [[ "${ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
@@ -297,10 +331,10 @@ resolve_settings() {
   VM_COUNT="${VM_COUNT:-${GOVC_VM_COUNT:-2}}"
   VM_PREFIX="${VM_PREFIX:-${GOVC_VM_NAME_PREFIX:-talos-lb}}"
   VM_START_INDEX="${VM_START_INDEX:-${GOVC_VM_START_INDEX:-1}}"
-  VM_TEMPLATE_NAME="${VM_TEMPLATE_NAME:-${GOVC_VM_TEMPLATE_NAME:-${TF_TEMPLATE_NAME:-}}}"
-  VM_OVA_PATH="${VM_OVA_PATH:-${GOVC_VM_OVA_PATH:-}}"
-  VM_OVF_PATH="${VM_OVF_PATH:-${GOVC_VM_OVF_PATH:-}}"
-  VM_MODE="${VM_MODE:-${GOVC_VM_MODE:-auto}}"
+  VM_TEMPLATE_NAME="${VM_TEMPLATE_NAME:-${HAPROXY_VM_TEMPLATE_NAME:-${GOVC_VM_TEMPLATE_NAME:-${TF_TEMPLATE_NAME:-}}}}"
+  VM_OVA_PATH="${VM_OVA_PATH:-${HAPROXY_VM_OVA_PATH:-${GOVC_VM_OVA_PATH:-}}}"
+  VM_OVF_PATH="${VM_OVF_PATH:-${HAPROXY_VM_OVF_PATH:-${GOVC_VM_OVF_PATH:-}}}"
+  VM_MODE="${VM_MODE:-${HAPROXY_VM_MODE:-${GOVC_VM_MODE:-auto}}}"
   VM_CPUS="${VM_CPUS:-${GOVC_VM_CPUS:-${TF_VM_CPUS:-2}}}"
   VM_MEMORY_MB="${VM_MEMORY_MB:-${GOVC_VM_MEMORY_MB:-${TF_VM_MEMORY_MB:-4096}}}"
   VM_DISK_GB="${VM_DISK_GB:-${GOVC_VM_DISK_GB:-${TF_VM_DISK_GB:-40}}}"
@@ -315,15 +349,17 @@ resolve_settings() {
   VM_DISK_CONTROLLER="${VM_DISK_CONTROLLER:-${GOVC_VM_DISK_CONTROLLER:-scsi}}"
   VM_POWER_ON="${VM_POWER_ON:-${GOVC_VM_POWER_ON:-true}}"
   VM_OVERWRITE="${VM_OVERWRITE:-${GOVC_VM_OVERWRITE:-false}}"
-  VM_AUTO_FALLBACK_EMPTY="${VM_AUTO_FALLBACK_EMPTY:-${GOVC_VM_AUTO_FALLBACK_EMPTY:-false}}"
+  VM_AUTO_FALLBACK_EMPTY="${VM_AUTO_FALLBACK_EMPTY:-${HAPROXY_VM_AUTO_FALLBACK_EMPTY:-${GOVC_VM_AUTO_FALLBACK_EMPTY:-false}}}"
   VM_STATIC_IPS="${VM_STATIC_IPS:-${GOVC_VM_STATIC_IPS:-${HAPROXY_NODE_1_IP:-},${HAPROXY_NODE_2_IP:-}}}"
-  VM_GATEWAY="${VM_GATEWAY:-${GOVC_VM_GATEWAY:-${TALOS_GATEWAY:-}}}"
+  VM_GATEWAY="${VM_GATEWAY:-${GOVC_VM_GATEWAY:-${NETWORK_GATEWAY:-${TALOS_GATEWAY:-}}}}"
   VM_NETMASK_PREFIX="${VM_NETMASK_PREFIX:-${GOVC_VM_NETMASK_PREFIX:-24}}"
-  VM_NAMESERVERS="${VM_NAMESERVERS:-${GOVC_VM_NAMESERVERS:-${TALOS_NAMESERVERS:-}}}"
-  VM_STATIC_INTERFACE="${VM_STATIC_INTERFACE:-${GOVC_VM_STATIC_INTERFACE:-ens160}}"
-  VM_GUEST_USERNAME="${VM_GUEST_USERNAME:-${GOVC_VM_GUEST_USERNAME:-}}"
-  VM_GUEST_PASSWORD="${VM_GUEST_PASSWORD:-${GOVC_VM_GUEST_PASSWORD:-}}"
+  VM_NAMESERVERS="${VM_NAMESERVERS:-${GOVC_VM_NAMESERVERS:-${NETWORK_NAMESERVERS:-${DNS_LISTEN_ADDRESSES:-${HAPROXY_VM_NAMESERVERS:-${TALOS_NAMESERVERS:-${DNS_UPSTREAM_SERVERS:-}}}}}}}"
+  VM_STATIC_INTERFACE="${HAPROXY_VM_STATIC_INTERFACE:-${VM_STATIC_INTERFACE:-${GOVC_VM_STATIC_INTERFACE:-ens160}}}"
+  VM_GUEST_USERNAME="${VM_GUEST_USERNAME:-${HAPROXY_VM_GUEST_USERNAME:-${GOVC_VM_GUEST_USERNAME:-${BUILD_USERNAME:-}}}}"
+  VM_GUEST_PASSWORD="${VM_GUEST_PASSWORD:-${HAPROXY_VM_GUEST_PASSWORD:-${GOVC_VM_GUEST_PASSWORD:-${BUILD_PASSWORD:-}}}}"
   VM_ENFORCE_GUEST_STATIC_NETWORK="${VM_ENFORCE_GUEST_STATIC_NETWORK:-${GOVC_VM_ENFORCE_GUEST_STATIC_NETWORK:-auto}}"
+  VM_CLOUDINIT_PUBLIC_KEY="${HAPROXY_CLOUDINIT_PUBLIC_KEY:-${BUILD_KEY:-${ANSIBLE_KEY:-}}}"
+  VM_CLOUDINIT_PASSWORD="${HAPROXY_CLOUDINIT_PASSWORD:-${VM_GUEST_PASSWORD:-${BUILD_PASSWORD:-}}}"
 
   VM_STATIC_IP_ARRAY=()
   VM_NAMESERVER_ARRAY=()
@@ -424,6 +460,15 @@ resolve_artifact_path() {
   local resolved=""
 
   [[ -n "${artifact_value}" ]] || return 1
+
+  case "${artifact_value}" in
+    http://*|https://*)
+      printf '%s\n' "${artifact_value}"
+      return 0
+      ;;
+    *)
+      ;;
+  esac
 
   if [[ "${artifact_value}" = /* ]]; then
     search_paths+=("${artifact_value}")
@@ -599,6 +644,7 @@ build_cloud_init_metadata() {
   local static_ip="$2"
   local dns_inline=""
   local ns=""
+  local iface_block=""
 
   for ns in "${VM_NAMESERVER_ARRAY[@]}"; do
     if [[ -n "${dns_inline}" ]]; then
@@ -607,20 +653,77 @@ build_cloud_init_metadata() {
     dns_inline+="${ns}"
   done
 
+  if [[ "${VM_STATIC_INTERFACE}" == "auto" ]]; then
+    iface_block=$(cat <<'EOF_IFACE'
+    primary:
+      match:
+        name: "e*"
+EOF_IFACE
+)
+  else
+    iface_block=$(cat <<EOF_IFACE
+    ${VM_STATIC_INTERFACE}:
+EOF_IFACE
+)
+  fi
+
   cat <<EOF_META
 instance-id: ${vm_name}
 local-hostname: ${vm_name}
 network:
   version: 2
   ethernets:
-    ${VM_STATIC_INTERFACE}:
+${iface_block}
       dhcp4: false
       addresses:
         - ${static_ip}/${VM_NETMASK_PREFIX}
-      gateway4: ${VM_GATEWAY}
+      routes:
+        - to: default
+          via: ${VM_GATEWAY}
       nameservers:
         addresses: [${dns_inline}]
 EOF_META
+}
+
+build_cloud_init_user_data() {
+  local vm_name="$1"
+  local user_name="$2"
+  local user_pass="$3"
+  local user_key="$4"
+
+  cat <<EOF_USERDATA
+#cloud-config
+preserve_hostname: false
+hostname: ${vm_name}
+manage_etc_hosts: true
+users:
+  - default
+EOF_USERDATA
+
+  if [[ -n "${user_name}" ]]; then
+    cat <<EOF_USERDATA
+  - name: ${user_name}
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+EOF_USERDATA
+    if [[ -n "${user_key}" ]]; then
+      cat <<EOF_USERDATA
+    ssh_authorized_keys:
+      - ${user_key}
+EOF_USERDATA
+    fi
+  fi
+
+  if [[ -n "${user_pass}" && -n "${user_name}" ]]; then
+    cat <<EOF_USERDATA
+chpasswd:
+  expire: false
+  list: |
+    ${user_name}:${user_pass}
+ssh_pwauth: true
+EOF_USERDATA
+  fi
 }
 
 wait_for_guest_login() {
@@ -643,18 +746,39 @@ build_guest_static_network_script() {
   local static_ip="$2"
   local dns_lines=""
   local ns=""
+  local iface_script=""
 
   for ns in "${VM_NAMESERVER_ARRAY[@]}"; do
     dns_lines+="          - ${ns}"$'\n'
   done
 
+  if [[ "${VM_STATIC_INTERFACE}" == "auto" ]]; then
+    iface_script=$(cat <<'EOF_IFACE'
+IFACE="$(ip -o route show to default 2>/dev/null | awk '{print $5; exit}')"
+if [[ -z "${IFACE}" ]]; then
+  IFACE="$(ip -o link show | awk -F': ' '/^[0-9]+: e/ {print $2; exit}')"
+fi
+if [[ -z "${IFACE}" ]]; then
+  echo "Could not auto-detect network interface" >&2
+  exit 1
+fi
+EOF_IFACE
+)
+  else
+    iface_script=$(cat <<EOF_IFACE
+IFACE="${VM_STATIC_INTERFACE}"
+EOF_IFACE
+)
+  fi
+
   cat <<EOF_GUEST
 set -euo pipefail
+${iface_script}
 cat >/tmp/99-govc-static.yaml <<NET
 network:
   version: 2
   ethernets:
-    ${VM_STATIC_INTERFACE}:
+    \${IFACE}:
       dhcp4: false
       addresses:
         - ${static_ip}/${VM_NETMASK_PREFIX}
@@ -670,6 +794,9 @@ cat >/tmp/99-disable-network-config.cfg <<'CLOUD'
 network: {config: disabled}
 CLOUD
 sudo install -m 0644 /tmp/99-disable-network-config.cfg /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+if [[ -f /etc/netplan/50-cloud-init.yaml ]]; then
+  sudo rm -f /etc/netplan/50-cloud-init.yaml
+fi
 sudo hostnamectl set-hostname ${vm_name} || true
 sudo netplan generate
 sudo netplan apply
@@ -770,6 +897,8 @@ create_vm() {
   local static_ip=""
   local metadata=""
   local metadata_b64=""
+  local user_data=""
+  local user_data_b64=""
 
   if vm_exists "${vm_name}"; then
     if [[ "${VM_OVERWRITE}" == "true" ]]; then
@@ -841,6 +970,15 @@ create_vm() {
       -e "guestinfo.metadata.encoding=base64"
   fi
 
+  if [[ -n "${VM_GUEST_USERNAME}" || -n "${VM_CLOUDINIT_PUBLIC_KEY}" || -n "${VM_CLOUDINIT_PASSWORD}" ]]; then
+    user_data="$(build_cloud_init_user_data "${vm_name}" "${VM_GUEST_USERNAME}" "${VM_CLOUDINIT_PASSWORD}" "${VM_CLOUDINIT_PUBLIC_KEY}")"
+    user_data_b64="$(printf '%s' "${user_data}" | base64 | tr -d '\n')"
+    govc vm.change \
+      -vm "${vm_name}" \
+      -e "guestinfo.userdata=${user_data_b64}" \
+      -e "guestinfo.userdata.encoding=base64"
+  fi
+
   if [[ "${VM_CREATE_STRATEGY}" == "clone" ]]; then
     govc vm.disk.change -vm "${vm_name}" -disk.name "${VM_DISK_NAME}" -size "${VM_DISK_GB}G"
   elif [[ "${VM_CREATE_STRATEGY}" == "ova" || "${VM_CREATE_STRATEGY}" == "ovf" ]]; then
@@ -909,13 +1047,26 @@ main() {
   parse_args "$@"
   validate_base_inputs
   load_context
+  if [[ "${SHOW_VALUES}" == "true" ]]; then
+    local selected_vars_file=""
+    if [[ -n "${CUSTOM_VARS_FILE}" ]]; then
+      selected_vars_file="${CUSTOM_VARS_FILE}"
+      [[ "${selected_vars_file}" = /* ]] || selected_vars_file="${REPO_ROOT}/${selected_vars_file}"
+    else
+      selected_vars_file="${REPO_ROOT}/overlays/${ENV_NAME}/scripts/vars.sh"
+    fi
+    if [[ -f "${selected_vars_file}" ]]; then
+      print_selected_vars "${selected_vars_file}"
+    fi
+    exit 0
+  fi
   resolve_settings
   validate_resolved_settings
   resolve_create_strategy
 
   print_plan
 
-  if [[ "${ACTION}" == "plan" ]]; then
+  if [[ "${ACTION}" == "plan" || "${DRY_RUN}" == "true" ]]; then
     return 0
   fi
 

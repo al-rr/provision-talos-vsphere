@@ -24,7 +24,7 @@ Remote execution requires:
 - `install.sh`: installs HAProxy and required dependencies.
 - `setup.sh`: renders `haproxy.cfg`, applies it, validates, reloads service.
 - `hardening.sh`: applies sysctl profile and firewall rules.
-- `run-full.sh`: provisions two nodes with `govc`, then installs/configures HAProxy and Keepalived.
+- `run-full.sh`: provisions two nodes with `govc`, then installs/configures HAProxy, applies hardening, and configures Keepalived.
   Keepalived module source is `infra-gitops/scripts/keepalived`.
 - `govc/provision.sh`: VMware-specific provisioning entrypoint for HAProxy VMs.
 - `vars.sh`: module defaults.
@@ -42,19 +42,21 @@ Important variables:
 - `HAPROXY_STATS_PASS="changeme"`
 - `HAPROXY_ALLOWED_PORTS="6443,8404"`
 - `HAPROXY_SYSCTL_PROFILE="secure"`
+- `HAPROXY_VM_TEMPLATE_NAME`, `HAPROXY_VM_OVA_PATH`, `HAPROXY_VM_OVF_PATH`
+- `HAPROXY_VM_NAMESERVERS` (defaults to `NETWORK_NAMESERVERS`, typically `192.168.0.53` in lab)
 
 Override these in `overlays/<env>/scripts/vars.sh` when needed.
 
 ## Script Inventory
 - `install.sh` flags:
-  - `--env`, `--host`, `--user`, `--port`, `--ssh-key`, `--dry-run`
+  - `--env`, `--vars-file`, `--host`, `--user`, `--port`, `--ssh-key`, `--show-values`, `--dry-run`
 - `setup.sh` flags:
-  - `--env`, `--template`, `--output`, `--host`, `--user`, `--port`, `--ssh-key`, `--reload`, `--no-reload`, `--dry-run`
+  - `--env`, `--vars-file`, `--template`, `--output`, `--host`, `--user`, `--port`, `--ssh-key`, `--show-values`, `--reload`, `--no-reload`, `--dry-run`
 - `hardening.sh` flags:
-  - `--env`, `--ports`, `--host`, `--user`, `--port`, `--ssh-key`, `--dry-run`
+  - `--env`, `--vars-file`, `--ports`, `--host`, `--user`, `--port`, `--ssh-key`, `--show-values`, `--dry-run`
 - `run-full.sh` flags:
   - `--env`, `--vars-file`, `--count`, `--prefix`, `--mode`, `--overwrite`
-  - `--skip-provision`, `--skip-haproxy`, `--skip-keepalived`
+  - `--skip-provision`, `--skip-haproxy`, `--skip-hardening`, `--skip-keepalived`, `--show-values`
   - `--user`, `--port`, `--ssh-key`, `--ssh-key-dir`, `--infra-gitops-root`, `--dry-run`
 
 ## Full Flow
@@ -63,11 +65,15 @@ Override these in `overlays/<env>/scripts/vars.sh` when needed.
 1. Provision the two VMs with `govc`
 2. Install HAProxy on both nodes
 3. Apply HAProxy configuration on both nodes
-4. Install Keepalived on both nodes
-5. Apply Keepalived configuration with `MASTER` on node 1 and `BACKUP` on node 2
+4. Apply host hardening on both nodes
+5. Install Keepalived on both nodes
+6. Apply Keepalived configuration with `MASTER` on node 1 and `BACKUP` on node 2
 
 The script reuses the existing scripts instead of duplicating logic.
 It currently supports exactly two nodes, which matches the keepalived HA pair design.
+When `HAPROXY_VIP` is set, `run-full.sh` derives `KEEPALIVED_VIPS` automatically as `${HAPROXY_VIP}/${NETWORK_NETMASK_PREFIX}`.
+Keepalived template path is resolved from `--infra-gitops-root` and passed explicitly to avoid relative-path issues.
+When guest static networking is enforced, provisioning disables cloud-init network config and removes `/etc/netplan/50-cloud-init.yaml` before `netplan apply` to prevent duplicate default-route conflicts.
 
 For SSH authentication it can:
 - use `--ssh-key` for both nodes
@@ -125,6 +131,16 @@ Run only configuration steps for already provisioned hosts:
   --skip-provision \
   --count=2 \
   --prefix=talos-lb
+```
+
+Show values only (no execution):
+
+```bash
+./overlays/base/scripts/ha-proxy/govc/provision.sh --env=lab --show-values create
+./overlays/base/scripts/ha-proxy/install.sh --env=lab --show-values
+./overlays/base/scripts/ha-proxy/setup.sh --env=lab --show-values
+./overlays/base/scripts/ha-proxy/hardening.sh --env=lab --show-values
+./overlays/base/scripts/ha-proxy/run-full.sh --env=lab --show-values
 ```
 
 ## Testing Notes

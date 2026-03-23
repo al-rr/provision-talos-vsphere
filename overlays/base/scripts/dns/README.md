@@ -161,6 +161,7 @@ Network interface defaults:
 - `DNS_VM_STATIC_INTERFACE` defaults to `auto`.
 - In `auto`, provisioning uses cloud-init/netplan matching (`name: "e*"`) and in-guest fallback detection.
 - You can still override with a fixed interface name when required.
+- During in-guest static enforcement, provisioning disables cloud-init network management and removes `/etc/netplan/50-cloud-init.yaml` before applying `/etc/netplan/99-govc-static.yaml`, preventing duplicate default-route declarations.
 
 Clone source note:
 

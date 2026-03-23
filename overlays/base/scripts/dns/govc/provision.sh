@@ -818,6 +818,9 @@ cat >/tmp/99-disable-network-config.cfg <<'CLOUD'
 network: {config: disabled}
 CLOUD
 sudo install -m 0644 /tmp/99-disable-network-config.cfg /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+if [[ -f /etc/netplan/50-cloud-init.yaml ]]; then
+  sudo rm -f /etc/netplan/50-cloud-init.yaml
+fi
 sudo hostnamectl set-hostname ${vm_name} || true
 sudo netplan generate
 sudo netplan apply

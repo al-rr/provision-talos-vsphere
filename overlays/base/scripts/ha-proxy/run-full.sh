@@ -12,12 +12,17 @@ CUSTOM_VARS_FILE=""
 VM_COUNT="2"
 VM_PREFIX="talos-lb"
 VM_MODE="auto"
+VM_TEMPLATE_NAME=""
+VM_OVA_PATH=""
+VM_OVF_PATH=""
 VM_OVERWRITE="false"
 HA_MODE="true"
 SKIP_PROVISION="false"
 SKIP_HAPROXY="false"
+SKIP_HARDENING="false"
 SKIP_KEEPALIVED="false"
 DRY_RUN="false"
+SHOW_VALUES="false"
 SSH_USER=""
 SSH_PORT="22"
 SSH_KEY=""
@@ -34,6 +39,7 @@ source "${BASE_SCRIPT_DIR}/functions.sh"
 GOVC_PROVISION_SCRIPT="${REPO_ROOT}/overlays/base/scripts/ha-proxy/govc/provision.sh"
 HAPROXY_INSTALL_SCRIPT="${SCRIPT_DIR}/install.sh"
 HAPROXY_SETUP_SCRIPT="${SCRIPT_DIR}/setup.sh"
+HAPROXY_HARDENING_SCRIPT="${SCRIPT_DIR}/hardening.sh"
 KEEPALIVED_INSTALL_SCRIPT="${INFRA_GITOPS_ROOT}/scripts/keepalived/install.sh"
 KEEPALIVED_SETUP_SCRIPT="${INFRA_GITOPS_ROOT}/scripts/keepalived/setup.sh"
 
@@ -56,12 +62,17 @@ Options:
       --count=<n>              Number of VMs to manage (default: 2)
       --prefix=<name>          VM name prefix (default: talos-lb)
       --mode=<name>            govc provision mode (default: auto)
+      --template=<name>        Source VM/template for clone mode
+      --ova-path=<path|url>    OVA source (local path or URL) for ova/auto mode
+      --ovf-path=<path|url>    OVF source (local path or URL) for ovf/auto mode
       --overwrite              Recreate existing VMs during provisioning
       --ha                     Configure load balancer in HA mode (default)
       --no-ha                  Configure only HAProxy (skip Keepalived/VIP)
       --skip-provision         Skip govc provisioning
       --skip-haproxy           Skip HAProxy install/setup
+      --skip-hardening         Skip HAProxy host hardening
       --skip-keepalived        Skip Keepalived install/setup
+      --show-values            Print resolved values and exit
       --user=<user>            SSH user for remote configuration
       --port=<port>            SSH port for remote configuration (default: 22)
       --ssh-key=<path>         SSH private key used for both nodes
@@ -95,6 +106,18 @@ parse_args() {
         VM_MODE="${1#*=}"
         shift
         ;;
+      --template=*)
+        VM_TEMPLATE_NAME="${1#*=}"
+        shift
+        ;;
+      --ova-path=*)
+        VM_OVA_PATH="${1#*=}"
+        shift
+        ;;
+      --ovf-path=*)
+        VM_OVF_PATH="${1#*=}"
+        shift
+        ;;
       --overwrite)
         VM_OVERWRITE="true"
         shift
@@ -115,8 +138,16 @@ parse_args() {
         SKIP_HAPROXY="true"
         shift
         ;;
+      --skip-hardening)
+        SKIP_HARDENING="true"
+        shift
+        ;;
       --skip-keepalived)
         SKIP_KEEPALIVED="true"
+        shift
+        ;;
+      --show-values)
+        SHOW_VALUES="true"
         shift
         ;;
       --user=*)
@@ -179,6 +210,7 @@ validate_args() {
   require_file "${GOVC_PROVISION_SCRIPT}"
   require_file "${HAPROXY_INSTALL_SCRIPT}"
   require_file "${HAPROXY_SETUP_SCRIPT}"
+  require_file "${HAPROXY_HARDENING_SCRIPT}"
   KEEPALIVED_INSTALL_SCRIPT="${INFRA_GITOPS_ROOT}/scripts/keepalived/install.sh"
   KEEPALIVED_SETUP_SCRIPT="${INFRA_GITOPS_ROOT}/scripts/keepalived/setup.sh"
   require_file "${KEEPALIVED_INSTALL_SCRIPT}"
@@ -201,6 +233,7 @@ load_context() {
 
 resolve_defaults() {
   local build_user_default=""
+  local vip_prefix="24"
 
   NODE_1_NAME="${VM_PREFIX}-1"
   NODE_2_NAME=""
@@ -221,6 +254,16 @@ resolve_defaults() {
 
   if [[ -z "${SSH_KEY_DIR}" && "${ENV_NAME}" == "lab" ]]; then
     SSH_KEY_DIR="${REPO_ROOT}/overlays/lab/.vagrant/machines"
+  fi
+
+  VM_MODE="${VM_MODE:-${HAPROXY_VM_MODE:-auto}}"
+  VM_TEMPLATE_NAME="${VM_TEMPLATE_NAME:-${HAPROXY_VM_TEMPLATE_NAME:-}}"
+  VM_OVA_PATH="${VM_OVA_PATH:-${HAPROXY_VM_OVA_PATH:-}}"
+  VM_OVF_PATH="${VM_OVF_PATH:-${HAPROXY_VM_OVF_PATH:-}}"
+
+  if [[ -n "${HAPROXY_VIP:-}" ]]; then
+    vip_prefix="${NETWORK_NETMASK_PREFIX:-${VM_NETMASK_PREFIX:-24}}"
+    KEEPALIVED_VIPS="${HAPROXY_VIP}/${vip_prefix}"
   fi
 }
 
@@ -334,6 +377,15 @@ run_provision() {
     cmd+=("--vars-file=${CUSTOM_VARS_FILE}")
   fi
   cmd+=("--count=${VM_COUNT}" "--prefix=${VM_PREFIX}" "--mode=${VM_MODE}")
+  if [[ -n "${VM_TEMPLATE_NAME}" ]]; then
+    cmd+=("--template=${VM_TEMPLATE_NAME}")
+  fi
+  if [[ -n "${VM_OVA_PATH}" ]]; then
+    cmd+=("--ova-path=${VM_OVA_PATH}")
+  fi
+  if [[ -n "${VM_OVF_PATH}" ]]; then
+    cmd+=("--ovf-path=${VM_OVF_PATH}")
+  fi
   if [[ "${VM_OVERWRITE}" == "true" ]]; then
     cmd+=("--overwrite")
   fi
@@ -351,6 +403,7 @@ run_haproxy_for_node() {
   local key_path="$2"
   local install_cmd=("${HAPROXY_INSTALL_SCRIPT}" "--env=${ENV_NAME}")
   local setup_cmd=("${HAPROXY_SETUP_SCRIPT}" "--env=${ENV_NAME}")
+  local hardening_cmd=("${HAPROXY_HARDENING_SCRIPT}" "--env=${ENV_NAME}")
 
   if [[ -n "${CUSTOM_VARS_FILE}" ]]; then
     # The called scripts do not support vars-file, so we preload vars in this process only.
@@ -359,9 +412,13 @@ run_haproxy_for_node() {
 
   append_remote_args install_cmd "${host}" "${key_path}"
   append_remote_args setup_cmd "${host}" "${key_path}"
+  append_remote_args hardening_cmd "${host}" "${key_path}"
 
   run_cmd "${install_cmd[@]}"
   run_cmd "${setup_cmd[@]}"
+  if [[ "${SKIP_HARDENING}" != "true" ]]; then
+    run_cmd "${hardening_cmd[@]}"
+  fi
 }
 
 run_keepalived_for_node() {
@@ -375,6 +432,7 @@ run_keepalived_for_node() {
   local setup_cmd=(
     "${KEEPALIVED_SETUP_SCRIPT}"
     "--env=${ENV_NAME}"
+    "--template=${INFRA_GITOPS_ROOT}/scripts/keepalived/templates/keepalived.conf.tpl"
     "--state=${state}"
     "--priority=${priority}"
     "--src-ip=${src_ip}"
@@ -414,6 +472,14 @@ main() {
   resolve_defaults
   if [[ "${HA_MODE}" != "true" ]]; then
     SKIP_KEEPALIVED="true"
+  fi
+  if [[ "${SHOW_VALUES}" == "true" ]]; then
+    log_info "Resolved values:"
+    log_info "env=${ENV_NAME} count=${VM_COUNT} prefix=${VM_PREFIX} mode=${VM_MODE} overwrite=${VM_OVERWRITE}"
+    log_info "skip-provision=${SKIP_PROVISION} skip-haproxy=${SKIP_HAPROXY} skip-hardening=${SKIP_HARDENING} skip-keepalived=${SKIP_KEEPALIVED} ha=${HA_MODE}"
+    log_info "ssh-user=${SSH_USER} ssh-port=${SSH_PORT} ssh-key=${SSH_KEY:-<auto>}"
+    log_info "infra-gitops-root=${INFRA_GITOPS_ROOT}"
+    exit 0
   fi
   log_info "HA mode: ${HA_MODE}"
 
