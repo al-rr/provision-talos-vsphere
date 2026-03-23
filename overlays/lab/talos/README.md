@@ -35,7 +35,7 @@ Enable global patches in bootstrap flow only when needed:
   --cluster-name=talos
 ```
 
-## Day-1 Bootstrap Entry Point
+## Cluster Creation Entry Point
 
 Use:
 - `overlays/base/scripts/talos/cluster-bootstrap.sh`

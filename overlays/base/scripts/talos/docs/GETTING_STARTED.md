@@ -36,7 +36,7 @@ Cluster intent belongs in the cluster workspace, such as:
 | `kubectl` | Validate the cluster after bootstrap | [Controller guide](/home/vagrant/talos-vsphere-lab/overlays/lab/controller/README.md) |
 | `helm` | Install post-bootstrap components such as Cilium | [Controller guide](/home/vagrant/talos-vsphere-lab/overlays/lab/controller/README.md) |
 
-Important compatibility note:
+**Important compatibility note:**
 
 - `talosctl` should stay on the same major and minor version as the Talos nodes.
 - In practice, using the same version tag is the safest option.
@@ -86,5 +86,5 @@ Choose the guide that matches your deployment:
 Supporting modules:
 
 - `infra-gitops/scripts/dnsmasq/README.md`
-- [HAProxy module](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/ha-proxy/README.md)
+- [HAProxy](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/ha-proxy/README.md)
 - [Controller guide](/home/vagrant/talos-vsphere-lab/overlays/lab/controller/README.md)

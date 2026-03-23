@@ -56,7 +56,7 @@ spec: {}
 ### `spec.access` (required)
 - Type: `object`
 - Fields:
-  - `controlPlaneEndpoint` (`string`, URL with port, e.g. `https://192.168.0.250:6443`)
+  - `controlPlaneEndpoint` (`string`, URL with port, e.g. `https://192.168.0.30:6443`)
   - `talosApiPort` (`integer`, typically `50000`)
   - `kubeApiPort` (`integer`, typically `6443`)
 - Purpose: defines operator access and API endpoints.
@@ -133,7 +133,7 @@ Purpose:
 Paths stored in this file should be repository-relative, for example:
 
 - `overlays/lab/talos/talos/patches/cni.patch.yaml`
-- `overlays/lab/talos/talos/cilium/values.yaml`
+- `overlays/lab/talos/talos/helm/cilium/values.yaml`
 
 ## Update Rules
 

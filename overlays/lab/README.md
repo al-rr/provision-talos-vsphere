@@ -65,7 +65,7 @@ Useful direct checks:
 
 ## Talos Cluster From Scratch (Lab/ESXi)
 
-After VM provisioning is done, run the Day-1 Talos flow to generate config,
+After VM provisioning is done, run the initial Talos cluster creation flow to generate config,
 apply to nodes, and bootstrap:
 
 ```bash
@@ -125,3 +125,15 @@ Use them only when explicitly requested:
   --cp-ips=192.168.0.88,192.168.0.89,192.168.0.90 \
   --worker-ips=192.168.0.91,192.168.0.92,192.168.0.93
 ```
+
+## Variable Source Of Truth
+
+For this lab overlay, runtime values are centralized in:
+
+- `overlays/lab/scripts/vars.sh`
+
+Model:
+
+- `BUILD_*`: build/bootstrap identity for images and first-boot guest operations
+- `ANSIBLE_*`: remote automation identity for post-build configuration
+- module/tool vars (`DNS_*`, `TALOS_*`, `HAPROXY_*`, `GOVC_*`) resolve from this overlay file when applicable

@@ -5,7 +5,8 @@ cluster in lab.
 
 ## Why This Exists
 
-`cluster-spec.yaml` is the single source of truth for cluster intent:
+`cluster-spec.yaml` is the **single source of truth** for cluster intent:
+
 - node counts and IPs
 - endpoint and access model
 - network ranges
@@ -18,8 +19,8 @@ This avoids scattering critical decisions across many scripts and patch files.
 
 - `cluster-spec.yaml`: declarative architecture blueprint
 - `patches/cni.patch.yaml`: disables Talos default CNI and kube-proxy
-- `cilium/values.yaml`: Cilium chart custom values (Day-2)
-- `cilium/values.base.yaml`: upstream defaults snapshot for reference
+- `helm/cilium/values.yaml`: Cilium chart custom values (post-bootstrap)
+- `helm/cilium/values.base.yaml`: upstream defaults snapshot for reference
 
 ## Typical Flow
 
