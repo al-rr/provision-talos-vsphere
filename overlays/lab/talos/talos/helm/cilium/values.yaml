@@ -73,12 +73,12 @@ k8sServiceHostRef:
   # -- (string) Key in the ConfigMap containing the Kubernetes service endpoint
   key:
 # -- (string) Kubernetes service host - use "auto" for automatic lookup from the cluster-info ConfigMap
-k8sServiceHost: "192.168.0.30"
+k8sServiceHost: "localhost"
 # @schema
 # type: [string, integer]
 # @schema
 # -- (string) Kubernetes service port
-k8sServicePort: "6443"
+k8sServicePort: "7445"
 # @schema
 # type: [null, string]
 # @schema
@@ -349,8 +349,6 @@ securityContext:
       - NET_RAW
       # Used since cilium monitor uses mmap
       - IPC_LOCK
-      # Used in iptables. Consider removing once we are iptables-free
-      - SYS_MODULE
       # Needed to switch network namespaces (used for health endpoint, socket-LB).
       # We need it for now but might not need it for >= 5.11 specially
       # for the 'SYS_RESOURCE'.
@@ -372,7 +370,7 @@ securityContext:
       # Allow to execute program that changes UID (e.g. required for package installation)
       - SETUID
       # Allow to read dmesg and get kernel pointers when kptr_restrict=1
-      - SYSLOG
+      # - SYSLOG
     # -- Capabilities for the `mount-cgroup` init container
     mountCgroup:
       # Only used for 'mount' cgroup
@@ -394,9 +392,9 @@ securityContext:
       # uninstall all Cilium resources, and therefore it is likely that
       # will need the same capabilities.
       # Used since cilium modifies routing tables, etc...
-      - NET_ADMIN
+      - NET_ADMIN   
       # Used in iptables. Consider removing once we are iptables-free
-      - SYS_MODULE
+      # - SYS_MODULE   
       # We need it for now but might not need it for >= 5.11 specially
       # for the 'SYS_RESOURCE'.
       # In >= 5.8 there's already BPF and PERMON capabilities
@@ -949,15 +947,15 @@ envoyConfig:
 ingressController:
   # -- Enable cilium ingress controller
   # This will automatically set enable-envoy-config as well.
-  enabled: false
+  enabled: true
   # -- Set cilium ingress controller to be the default ingress controller
   # This will let cilium ingress controller route entries without ingress class set
-  default: false
+  default: true
   # -- Default ingress load balancer mode
   # Supported values: shared, dedicated
   # For granular control, use the following annotations on the ingress resource:
   # "ingress.cilium.io/loadbalancer-mode: dedicated" (or "shared").
-  loadbalancerMode: dedicated
+  loadbalancerMode: shared
   # -- Enforce https for host having matching TLS host in Ingress.
   # Incoming traffic to http listener will return 308 http error code with respective location in header.
   enforceHttps: true
@@ -1042,14 +1040,14 @@ ingressController:
 gatewayAPI:
   # -- Enable support for Gateway API in cilium
   # This will automatically set enable-envoy-config as well.
-  enabled: false
+  enabled: true
   # -- Enable proxy protocol for all GatewayAPI listeners. Note that _only_ Proxy protocol traffic will be accepted once this is enabled.
   enableProxyProtocol: false
   # -- Enable Backend Protocol selection support (GEP-1911) for Gateway API via appProtocol.
-  enableAppProtocol: false
+  enableAppProtocol: true
   # -- Enable ALPN for all listeners configured with Gateway API. ALPN will attempt HTTP/2, then HTTP 1.1.
   # Note that this will also enable `appProtocol` support, and services that wish to use HTTP/2 will need to indicate that via their `appProtocol`.
-  enableAlpn: false
+  enableAlpn: true
   # -- The number of additional GatewayAPI proxy hops from the right side of the HTTP header to trust when determining the origin client's IP address.
   xffNumTrustedHops: 0
   # -- Control how traffic from external sources is routed to the LoadBalancer Kubernetes Service for all Cilium GatewayAPI Gateway instances. Valid values are "Cluster" and "Local".
@@ -1100,15 +1098,15 @@ encryption:
     # -- Enable Encryption Pod2Pod strict mode. (deprecated: please use encryption.strictMode.egress.enabled)
     enabled: false
     # -- CIDR for the Encryption Pod2Pod strict mode. (deprecated: please use encryption.strictMode.egress.cidr)
-    cidr: ""
+    cidr: "0.0.0.0/0"
     # -- Allow dynamic lookup of remote node identities. (deprecated: please use encryption.strictMode.egress.allowRemoteNodeIdentities)
     # This is required when tunneling is used or direct routing is used and the node CIDR and pod CIDR overlap.
     allowRemoteNodeIdentities: false
     egress:
       # -- Enable strict egress encryption.
-      enabled: true
+      enabled: false
       # -- CIDR for the Encryption Pod2Pod strict egress mode.
-      cidr: ""
+      cidr: "0.0.0.0/0"
       # -- Allow dynamic lookup of remote node identities.
       # This is required when tunneling is used or direct routing is used and the node CIDR and pod CIDR overlap.
       allowRemoteNodeIdentities: false
@@ -2124,7 +2122,8 @@ installNoConntrackIptablesRules: false
 ipam:
   # -- Configure IP Address Management mode.
   # ref: https://docs.cilium.io/en/stable/network/concepts/ipam/
-  mode: "cluster-pool"
+  # mode: "cluster-pool"
+  mode: "kubernetes"
   # -- Maximum rate at which the CiliumNode custom resource is updated.
   ciliumNodeUpdateRate: "15s"
   # -- Pre-allocation settings for IPAM in Multi-Pool mode
@@ -4047,7 +4046,7 @@ cgroup:
     # If users disable `autoMount`, it's expected that users have mounted
     # cgroup2 filesystem at the specified `cgroup.hostRoot` volume, and then the
     # volume will be mounted inside the cilium agent pod at the same path.
-    enabled: true
+    enabled: false
     # -- Init Container Cgroup Automount resource limits & requests
     resources: {}
     #   limits:
@@ -4057,7 +4056,8 @@ cgroup:
     #     cpu: 100m
     #     memory: 128Mi
   # -- Configure cgroup root where cgroup2 filesystem is mounted on the host (see also: `cgroup.autoMount`)
-  hostRoot: /run/cilium/cgroupv2
+  # hostRoot: /run/cilium/cgroupv2
+  hostRoot: /sys/fs/cgroup
 # -- Configure sysctl override described in #20072.
 sysctlfix:
   # -- Enable the sysctl override. When enabled, the init container will mount the /proc of the host so that the `sysctlfix` utility can execute.
@@ -4339,4 +4339,3 @@ standaloneDnsProxy:
     digest: ""
     useDigest: true
     pullPolicy: "IfNotPresent"
-

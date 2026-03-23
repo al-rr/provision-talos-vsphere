@@ -1,0 +1,5 @@
+releaseName: cilium
+namespace: kube-system
+chart: oci://quay.io/cilium/charts/cilium
+version: 1.19.1
+valuesFile: overlays/lab/talos/talos/helm/cilium/values.yaml

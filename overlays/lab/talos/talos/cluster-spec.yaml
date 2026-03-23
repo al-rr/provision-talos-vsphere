@@ -29,10 +29,10 @@ spec:
     vip: "192.168.0.30"
     nodes:
       - name: "talos-lb-1"
-        ip: "192.168.0.55"
+        ip: "192.168.0.31"
         role: "MASTER"
       - name: "talos-lb-2"
-        ip: "192.168.0.56"
+        ip: "192.168.0.32"
         role: "BACKUP"
     backends:
       - "192.168.0.61:6443"
@@ -62,19 +62,36 @@ spec:
   cni:
     strategy: "Disable Talos default CNI and install Cilium (OCI + Helm 3)"
     talosPatchFile: "overlays/lab/talos/talos/patches/cni.patch.yaml"
-    ciliumValuesFile: "overlays/lab/talos/talos/cilium/values.yaml"
+    ciliumValuesFile: "overlays/lab/talos/talos/helm/cilium/values.yaml"
     cilium-custom:
       kubeProxyReplacement: "true"
-      k8sServiceHost: "192.168.0.30"
-      k8sServicePort: "6443"
+      k8sServiceHost: "localhost"
+      k8sServicePort: "7445"
+      ipam:
+        mode: "kubernetes"
       encryption:
         enabled: true
         type: wireguard
         nodeEncryption: true
         strictMode:
+          cidr: "0.0.0.0/0"
           egress:
-            enabled: true
-
+            enabled: false
+            cidr: "0.0.0.0/0"
+      nodePort:
+        policyAuditMode: true
+      ingressController:
+        enabled: true
+        default: true
+        loadbalancerMode: shared
+      gatewayAPI:
+        enabled: true
+        enableAlpn: true
+        enableAppProtocol: true
+      cgroup:
+        autoMount:          
+          enabled: false
+        hostRoot: /sys/fs/cgroup
 
   controllerPrerequisites:
     tools:
