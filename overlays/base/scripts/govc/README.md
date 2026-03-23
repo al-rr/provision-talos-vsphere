@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This directory stores shared VMware connection profiles used by other modules.
+This directory stores shared GOVC defaults used by other modules.
 The reusable `govc` installer module lives in `infra-gitops/scripts/govc/`.
 
 This module is not the owner of Talos, HAProxy, or DNS provisioning flows.
@@ -17,14 +17,12 @@ live inside that module, for example:
 | File | Purpose |
 | --- | --- |
 | `vars.sh` | Shared default variables for `govc` automation |
-| `vars-esxi-prod.sh` | ESXi-focused variable profile used by VMware-backed modules |
 
 ## What Belongs Here
 
-Keep only project-specific VMware profiles in this module:
+Keep only GOVC-specific shared defaults in this module:
 
-- VMware connection defaults
-- shared `govc` variable profiles
+- generic `govc` automation defaults (`vars.sh`)
 
 Do not keep workload-owned provisioning entrypoints here. Those should stay with
 the owning module so the module remains cohesive.
@@ -44,24 +42,30 @@ Optional version pin:
 
 ## Variable Profiles
 
-These files are commonly used by VMware-backed modules:
+Variable sources used by VMware-backed modules:
 
-- `overlays/base/scripts/govc/vars.sh`
-- `overlays/base/scripts/govc/vars-esxi-prod.sh`
+- `overlays/base/scripts/govc/vars.sh` (generic defaults)
+- `overlays/<env>/scripts/vars.sh` (environment source of truth)
+
+Identity model used by automation:
+
+- `BUILD_*`: account/key context used during image build/bootstrap
+- `ANSIBLE_*`: remote automation identity (SSH user/key for post-build operations)
+- `GOVC_VM_GUEST_*`: govc in-guest execution identity; defaults from `BUILD_*` unless explicitly overridden
 
 Typical usage:
 
 ```bash
 ./overlays/base/scripts/ha-proxy/govc/provision.sh \
   --env=lab \
-  --vars-file=overlays/base/scripts/govc/vars-esxi-prod.sh \
+  --vars-file=overlays/lab/scripts/vars.sh \
   create
 ```
 
 ```bash
 ./overlays/base/scripts/dns/provision.sh \
   --env=lab \
-  --vars-file=overlays/base/scripts/govc/vars-esxi-prod.sh \
+  --vars-file=overlays/lab/scripts/vars.sh \
   create
 ```
 
