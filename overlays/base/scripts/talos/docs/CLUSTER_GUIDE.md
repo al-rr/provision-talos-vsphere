@@ -104,14 +104,18 @@ Use explicit arguments when creating a brand-new cluster:
 
 ```bash
 ./overlays/base/scripts/talos/cluster-bootstrap.sh \
-  --env=lab \
+  --env=<env> \
   --mode=generate \
-  --cluster-name=talos \
-  --endpoint=https://192.168.0.250:6443 \
-  --generated-dir=overlays/lab/talos/talos/generated \
-  --cp-ips=192.168.0.88,192.168.0.89,192.168.0.90 \
-  --worker-ips=192.168.0.91,192.168.0.92,192.168.0.93
+  --cluster-name=<cluster-name> \
+  --endpoint=https://<vip-or-endpoint>:6443 \
+  --generated-dir=overlays/<env>/talos/<cluster-name>/generated \
+  --cp-ips=<cp1-ip>,<cp2-ip>,<cp3-ip> \
+  --worker-ips=<worker1-ip>,<worker2-ip>,<worker3-ip>
 ```
+
+Use [INFRASTRUCTURE_PLAN_EXAMPLE.md](INFRASTRUCTURE_PLAN_EXAMPLE.md) for a concrete sample,
+and keep your real environment values in your overlay workspace (for example
+`overlays/lab/talos/talos/cluster-spec.yaml`).
 
 ### 6. Apply Talos configuration
 
@@ -125,14 +129,23 @@ Or with explicit values:
 
 ```bash
 ./overlays/base/scripts/talos/cluster-bootstrap.sh \
-  --env=lab \
+  --env=<env> \
   --mode=apply \
-  --cluster-name=talos \
-  --endpoint=https://192.168.0.250:6443 \
-  --generated-dir=overlays/lab/talos/talos/generated \
-  --cp-ips=192.168.0.88,192.168.0.89,192.168.0.90 \
-  --worker-ips=192.168.0.91,192.168.0.92,192.168.0.93
+  --cluster-name=<cluster-name> \
+  --endpoint=https://<vip-or-endpoint>:6443 \
+  --generated-dir=overlays/<env>/talos/<cluster-name>/generated \
+  --cp-ips=<cp1-ip>,<cp2-ip>,<cp3-ip> \
+  --worker-ips=<worker1-ip>,<worker2-ip>,<worker3-ip>
 ```
+
+Important note:
+
+- `cluster-bootstrap.sh` now reconciles the Talos HAProxy frontend/backend automatically for this cluster.
+- It updates only the cluster-specific frontend/backend block (idempotent) and keeps unrelated HAProxy entries untouched.
+- Use `--skip-lb-config` only when you explicitly want to manage HAProxy manually.
+- After bootstrap, it validates kube-api readiness through the cluster endpoint VIP.
+- Tune validation with `--validate-timeout-seconds=<seconds>` and `--validate-interval-seconds=<seconds>`.
+- Use `--skip-post-validate` only when you intentionally want to skip this final health gate.
 
 ### 7. Bootstrap the cluster
 
