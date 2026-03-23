@@ -20,6 +20,12 @@ documented in the guides linked below.
 | `provision-single-node.sh`                 | Provision a non-HA Talos node                            | Thin wrapper over `overlays/base/scripts/talos/govc/provision-single-node.sh` |
 | `provision-cluster.sh`                     | Provision a Talos cluster topology                       | Thin wrapper over `overlays/base/scripts/talos/govc/provision-cluster.sh`     |
 | `cluster-bootstrap.sh`                     | Generate configs, apply configs, and bootstrap a cluster | Used after VMs are provisioned; auto-reconciles Talos LB and validates VIP kube-api |
+| `phase-cluster-ready.sh`                  | Phase 1 orchestration: provision + bootstrap + validation | Includes kubeconfig artifact generation and CNI/proxy runtime checks           |
+| `phase-network-bringup.sh`                | Phase 2 orchestration: render, validate, and install addon via Helm | Reusable for `--addon=cilium` and `--addon=argocd`                            |
+| `cilium.sh`                               | Reusable Cilium lifecycle entrypoint                      | Wrapper over `phase-network-bringup.sh --addon=cilium`                         |
+| `argocd.sh`                               | Reusable Argo CD lifecycle entrypoint                     | Wrapper over `phase-network-bringup.sh --addon=argocd`                         |
+| `sync-kubectl.sh`                         | Sync local kubectl kubeconfig/context                     | Updates `~/.kube/config` from generated cluster kubeconfig                      |
+| `sync-talosctl.sh`                        | Sync local talosctl config                                | Updates `~/.talos/config` with current endpoint and control-plane nodes         |
 | `configure_load_balancer.sh`               | Configure HAProxy backends for Talos control planes      | Reuses the HAProxy module                                                     |
 | `provision_and_configure_load_balancer.sh` | Provision HAProxy nodes and configure Talos backends     | Orchestration wrapper                                                         |
 | `vars.sh`                                  | Module defaults                                          | Loaded from `overlays/base/scripts/vars.sh`                                   |
@@ -31,6 +37,12 @@ The Talos module is split into two layers:
 - Talos operations:
   - `install.sh`
   - `cluster-bootstrap.sh`
+  - `phase-cluster-ready.sh`
+  - `phase-network-bringup.sh`
+  - `cilium.sh`
+  - `argocd.sh`
+  - `sync-kubectl.sh`
+  - `sync-talosctl.sh`
   - `configure_load_balancer.sh`
 - VMware provisioning wrappers backed by `govc`:
   - `provision-single-node.sh`
@@ -45,6 +57,8 @@ This means a user can stay in the Talos module for day-to-day usage, while still
 knowing that VM creation depends on `govc`.
 The cluster provisioning implementation (`talos/govc/provision-cluster.sh`)
 also syncs owner-scoped DNS records (`owner=talos`) after create/destroy.
+At the end of `phase-cluster-ready.sh`, local access is synchronized automatically
+for `kubectl` and `talosctl` (disable with `--skip-sync-access`).
 
 ## Required Tools
 

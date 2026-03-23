@@ -45,6 +45,60 @@ Recommended source of truth for cluster-specific intent:
 
 ## Recommended Execution Order
 
+## Phase-Oriented Flow
+
+Use this sequence for reproducible runs:
+
+1. Cluster Ready
+2. Network Bring-up
+3. GitOps Handoff (after Cilium is stable)
+
+### Cluster Ready phase
+
+```bash
+./overlays/base/scripts/talos/phase-cluster-ready.sh --env=lab
+```
+
+Important behavior when `TALOS_DISABLE_DEFAULT_CNI=true` (`cni: none`):
+
+- Kubernetes API is expected to be reachable after bootstrap.
+- Nodes are expected to stay `NotReady` until a CNI is installed (for example Cilium).
+- This is normal and does not block moving to the Network Bring-up phase.
+
+Control-plane-only test:
+
+```bash
+./overlays/base/scripts/talos/phase-cluster-ready.sh --env=lab --worker-count=0
+```
+
+### Network Bring-up phase
+
+Cilium:
+
+```bash
+./overlays/base/scripts/talos/cilium.sh --env=lab
+```
+
+Argo CD:
+
+```bash
+./overlays/base/scripts/talos/argocd.sh --env=lab
+```
+
+Render + API validation only (no install/upgrade):
+
+```bash
+./overlays/base/scripts/talos/cilium.sh --env=lab --render-only
+```
+
+### GitOps handoff phase
+
+After Cilium is stable:
+
+1. Install Argo CD.
+2. Move addon ownership to Argo CD Applications.
+3. Continue day-2 operations by PR/merge only.
+
 ### 1. Prepare controller tools
 
 Follow:
@@ -223,6 +277,8 @@ Follow:
 Examples:
 
 - install Cilium
+- update Cilium values and re-run `./overlays/base/scripts/talos/cilium.sh --env=lab`
+- install or update Argo CD with `./overlays/base/scripts/talos/argocd.sh --env=lab`
 - patch machine configuration
 - update control-plane or worker settings
 - validate node readiness and networking
