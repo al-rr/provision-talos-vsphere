@@ -61,6 +61,7 @@ HAS_PORT_ARG="false"
 HAS_SSH_KEY_ARG="false"
 
 SETUP_ARGS=()
+DNSMASQ_ENV_ARGS=()
 
 if [[ ! -x "${DNSMASQ_SETUP}" ]]; then
   echo "[ERROR] Missing dnsmasq setup script: ${DNSMASQ_SETUP}" >&2
@@ -98,6 +99,19 @@ fi
 # shellcheck disable=SC1090
 source "${SELECTED_VARS_FILE}"
 
+# Bridge DNS module vars to reusable dnsmasq module vars (wrapper-local only).
+DNSMASQ_DOMAIN_BRIDGE="${DNSMASQ_DOMAIN:-${DNS_DOMAIN:-}}"
+DNSMASQ_LISTEN_ADDRESSES_BRIDGE="${DNSMASQ_LISTEN_ADDRESSES:-${DNS_LISTEN_ADDRESSES:-}}"
+DNSMASQ_UPSTREAM_SERVERS_BRIDGE="${DNSMASQ_UPSTREAM_SERVERS:-${DNS_UPSTREAM_SERVERS:-}}"
+DNSMASQ_A_RECORDS_BRIDGE="${DNSMASQ_A_RECORDS:-${DNS_A_RECORDS:-}}"
+
+if [[ -z "${DNSMASQ_A_RECORDS_BRIDGE}" ]] && declare -p DNS_A_RECORDS_LIST >/dev/null 2>&1; then
+  if [[ "${#DNS_A_RECORDS_LIST[@]}" -gt 0 ]]; then
+    DNSMASQ_A_RECORDS_BRIDGE="$(printf '%s,' "${DNS_A_RECORDS_LIST[@]}")"
+    DNSMASQ_A_RECORDS_BRIDGE="${DNSMASQ_A_RECORDS_BRIDGE%,}"
+  fi
+fi
+
 if [[ "${HAS_HOST_ARG}" == "false" ]]; then
   AUTO_HOST="${DNS_VM_STATIC_IP:-}"
   if [[ -z "${AUTO_HOST}" ]]; then
@@ -132,6 +146,23 @@ if [[ "${SHOW_VALUES}" == "true" ]]; then
   print_var_line "DNS_TARGET_PORT" "${AUTO_PORT:-<from-cli>}"
   print_var_line "DNS_TARGET_SSH_KEY" "${AUTO_SSH_KEY:-<from-cli>}"
   exit 0
+fi
+
+if [[ -n "${DNSMASQ_DOMAIN_BRIDGE}" ]]; then
+  DNSMASQ_ENV_ARGS+=("DNSMASQ_DOMAIN=${DNSMASQ_DOMAIN_BRIDGE}")
+fi
+if [[ -n "${DNSMASQ_LISTEN_ADDRESSES_BRIDGE}" ]]; then
+  DNSMASQ_ENV_ARGS+=("DNSMASQ_LISTEN_ADDRESSES=${DNSMASQ_LISTEN_ADDRESSES_BRIDGE}")
+fi
+if [[ -n "${DNSMASQ_UPSTREAM_SERVERS_BRIDGE}" ]]; then
+  DNSMASQ_ENV_ARGS+=("DNSMASQ_UPSTREAM_SERVERS=${DNSMASQ_UPSTREAM_SERVERS_BRIDGE}")
+fi
+if [[ -n "${DNSMASQ_A_RECORDS_BRIDGE}" ]]; then
+  DNSMASQ_ENV_ARGS+=("DNSMASQ_A_RECORDS=${DNSMASQ_A_RECORDS_BRIDGE}")
+fi
+
+if [[ "${#DNSMASQ_ENV_ARGS[@]}" -gt 0 ]]; then
+  exec env "${DNSMASQ_ENV_ARGS[@]}" "${DNSMASQ_SETUP}" "${SETUP_ARGS[@]}"
 fi
 
 exec "${DNSMASQ_SETUP}" "${SETUP_ARGS[@]}"

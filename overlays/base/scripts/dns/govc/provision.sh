@@ -77,6 +77,8 @@ VM_GUEST_USERNAME=""
 VM_GUEST_PASSWORD=""
 VM_ENFORCE_GUEST_STATIC_NETWORK=""
 VM_APPLY_GUEST_STATIC_NETWORK="false"
+VM_CLOUDINIT_PUBLIC_KEY=""
+VM_CLOUDINIT_PASSWORD=""
 
 declare -a VM_STATIC_IP_ARRAY=()
 declare -a VM_NAMESERVER_ARRAY=()
@@ -376,10 +378,12 @@ resolve_settings() {
   VM_GATEWAY="${VM_GATEWAY:-${DNS_VM_GATEWAY:-${GOVC_VM_GATEWAY:-${TALOS_GATEWAY:-}}}}"
   VM_NETMASK_PREFIX="${VM_NETMASK_PREFIX:-${DNS_VM_NETMASK_PREFIX:-${GOVC_VM_NETMASK_PREFIX:-24}}}"
   VM_NAMESERVERS="${VM_NAMESERVERS:-${DNS_VM_BOOTSTRAP_NAMESERVERS:-${GOVC_VM_NAMESERVERS:-${TALOS_NAMESERVERS:-}}}}"
-  VM_STATIC_INTERFACE="${VM_STATIC_INTERFACE:-${DNS_VM_STATIC_INTERFACE:-${GOVC_VM_STATIC_INTERFACE:-ens160}}}"
-  VM_GUEST_USERNAME="${VM_GUEST_USERNAME:-${DNS_VM_GUEST_USERNAME:-${GOVC_VM_GUEST_USERNAME:-}}}"
-  VM_GUEST_PASSWORD="${VM_GUEST_PASSWORD:-${DNS_VM_GUEST_PASSWORD:-${GOVC_VM_GUEST_PASSWORD:-}}}"
+  VM_STATIC_INTERFACE="${DNS_VM_STATIC_INTERFACE:-${VM_STATIC_INTERFACE:-${GOVC_VM_STATIC_INTERFACE:-ens160}}}"
+  VM_GUEST_USERNAME="${VM_GUEST_USERNAME:-${DNS_VM_GUEST_USERNAME:-${GOVC_VM_GUEST_USERNAME:-${BUILD_USERNAME:-}}}}"
+  VM_GUEST_PASSWORD="${VM_GUEST_PASSWORD:-${DNS_VM_GUEST_PASSWORD:-${GOVC_VM_GUEST_PASSWORD:-${BUILD_PASSWORD:-}}}}"
   VM_ENFORCE_GUEST_STATIC_NETWORK="${VM_ENFORCE_GUEST_STATIC_NETWORK:-${DNS_VM_GUEST_STATIC:-${GOVC_VM_ENFORCE_GUEST_STATIC_NETWORK:-auto}}}"
+  VM_CLOUDINIT_PUBLIC_KEY="${DNS_CLOUDINIT_PUBLIC_KEY:-${BUILD_KEY:-${ANSIBLE_KEY:-}}}"
+  VM_CLOUDINIT_PASSWORD="${DNS_CLOUDINIT_PASSWORD:-${VM_GUEST_PASSWORD:-${BUILD_PASSWORD:-}}}"
 
   VM_STATIC_IP_ARRAY=()
   VM_NAMESERVER_ARRAY=()
@@ -462,9 +466,9 @@ validate_resolved_settings() {
     fi
   fi
 
-  [[ -n "${GOVC_URL:-}" ]] || die "GOVC_URL is empty. Set vSphere endpoint credentials in overlay vars."
-  [[ -n "${GOVC_USERNAME:-}" ]] || die "GOVC_USERNAME is empty."
-  [[ -n "${GOVC_PASSWORD:-}" ]] || die "GOVC_PASSWORD is empty."
+  [[ -n "${GOVC_URL:-}" ]] || die "GOVC_URL is empty. Set VSPHERE_ENDPOINT in overlays/<env>/scripts/vars.sh or export GOVC_URL."
+  [[ -n "${GOVC_USERNAME:-}" ]] || die "GOVC_USERNAME is empty. Set VSPHERE_USERNAME in overlays/<env>/scripts/vars.sh or export GOVC_USERNAME."
+  [[ -n "${GOVC_PASSWORD:-}" ]] || die "GOVC_PASSWORD is empty. Set VSPHERE_PASSWORD in overlays/<env>/scripts/vars.sh or export GOVC_PASSWORD."
 }
 
 vm_name_at() {
@@ -480,6 +484,15 @@ resolve_artifact_path() {
   local resolved=""
 
   [[ -n "${artifact_value}" ]] || return 1
+
+  case "${artifact_value}" in
+    http://*|https://*)
+      printf '%s\n' "${artifact_value}"
+      return 0
+      ;;
+    *)
+      ;;
+  esac
 
   if [[ "${artifact_value}" = /* ]]; then
     search_paths+=("${artifact_value}")
@@ -673,10 +686,53 @@ network:
       dhcp4: false
       addresses:
         - ${static_ip}/${VM_NETMASK_PREFIX}
-      gateway4: ${VM_GATEWAY}
+      routes:
+        - to: default
+          via: ${VM_GATEWAY}
       nameservers:
         addresses: [${dns_inline}]
 EOF_META
+}
+
+build_cloud_init_user_data() {
+  local vm_name="$1"
+  local user_name="$2"
+  local user_pass="$3"
+  local user_key="$4"
+
+  cat <<EOF_USERDATA
+#cloud-config
+preserve_hostname: false
+hostname: ${vm_name}
+manage_etc_hosts: true
+users:
+  - default
+EOF_USERDATA
+
+  if [[ -n "${user_name}" ]]; then
+    cat <<EOF_USERDATA
+  - name: ${user_name}
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+EOF_USERDATA
+    if [[ -n "${user_key}" ]]; then
+      cat <<EOF_USERDATA
+    ssh_authorized_keys:
+      - ${user_key}
+EOF_USERDATA
+    fi
+  fi
+
+  if [[ -n "${user_pass}" && -n "${user_name}" ]]; then
+    cat <<EOF_USERDATA
+chpasswd:
+  expire: false
+  list: |
+    ${user_name}:${user_pass}
+ssh_pwauth: true
+EOF_USERDATA
+  fi
 }
 
 wait_for_guest_login() {
@@ -826,6 +882,8 @@ create_vm() {
   local static_ip=""
   local metadata=""
   local metadata_b64=""
+  local user_data=""
+  local user_data_b64=""
 
   if vm_exists "${vm_name}"; then
     if [[ "${VM_OVERWRITE}" == "true" ]]; then
@@ -895,6 +953,15 @@ create_vm() {
       -vm "${vm_name}" \
       -e "guestinfo.metadata=${metadata_b64}" \
       -e "guestinfo.metadata.encoding=base64"
+  fi
+
+  if [[ -n "${VM_GUEST_USERNAME}" || -n "${VM_CLOUDINIT_PUBLIC_KEY}" || -n "${VM_CLOUDINIT_PASSWORD}" ]]; then
+    user_data="$(build_cloud_init_user_data "${vm_name}" "${VM_GUEST_USERNAME}" "${VM_CLOUDINIT_PASSWORD}" "${VM_CLOUDINIT_PUBLIC_KEY}")"
+    user_data_b64="$(printf '%s' "${user_data}" | base64 | tr -d '\n')"
+    govc vm.change \
+      -vm "${vm_name}" \
+      -e "guestinfo.userdata=${user_data_b64}" \
+      -e "guestinfo.userdata.encoding=base64"
   fi
 
   if [[ "${VM_CREATE_STRATEGY}" == "clone" ]]; then

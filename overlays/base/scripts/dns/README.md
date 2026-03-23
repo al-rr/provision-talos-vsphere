@@ -31,6 +31,22 @@ You can also use OVA/OVF by setting one of:
 - `DNS_VM_OVA_PATH`
 - `DNS_VM_OVF_PATH`
 
+For Ubuntu cloud-image OVA, set bootstrap identity explicitly in overlay vars:
+
+- `DNS_VM_GUEST_USERNAME=<desired-user>`
+- `DNS_VM_GUEST_PASSWORD=<password>`
+- `DNS_CLOUDINIT_PUBLIC_KEY=<your-public-key>`
+- `DNS_SSH_USER=<same-user>`
+
+When these values are present, provisioning injects cloud-init `user-data` with:
+- user creation
+- password login enabled
+- `chpasswd.expire: false` (no forced password change on first login)
+
+Notes:
+- `ubuntu` is common for Ubuntu cloud images, but not required.
+- You can use your project user (for example `BUILD_USERNAME`) by setting `DNS_VM_GUEST_USERNAME` (or by letting it inherit from `BUILD_USERNAME` when not explicitly set).
+
 Example with lab profile:
 
 ```bash
@@ -53,6 +69,16 @@ Apply dnsmasq configuration:
 ./overlays/base/scripts/dns/setup.sh \
   --env=lab
 ```
+
+Record formats supported by wrapper:
+
+- Preferred: `DNS_A_RECORDS_LIST` bash array in `overlays/<env>/scripts/vars.sh`
+- Compatible: `DNS_A_RECORDS` CSV string (`host=ip,host2=ip2`)
+
+Lab note:
+- `DNS_A_RECORDS_LIST` can be composed from shared Talos variables (for example
+  `TALOS_CONTROL_PLANE_IPS` and `TALOS_WORKER_IPS`) so DNS records stay aligned
+  with cluster topology.
 
 Optional hosts file (if you prefer file-based records instead of `DNS_A_RECORDS`):
 
@@ -91,6 +117,22 @@ Remote target auto-resolution (when CLI flags are not explicitly provided):
 If no host is resolved, the wrapper exits with an error instead of silently
 falling back to local execution.
 
+## Validation Status (Lab)
+
+Validated flow:
+
+1. `./overlays/base/scripts/dns/govc/provision.sh --env=lab create`
+2. `./overlays/base/scripts/dns/install.sh --env=lab`
+3. `./overlays/base/scripts/dns/setup.sh --env=lab`
+
+Validated result on DNS VM:
+
+- `/etc/dnsmasq.hosts` includes:
+  - `talos-api`
+  - `talos-lb-1`, `talos-lb-2`
+  - `talos-cp-1..N`
+  - `talos-worker-1..N`
+
 ## Variable Precedence
 
 `govc/provision.sh` resolves values in this order:
@@ -105,6 +147,17 @@ Guest credential defaults for in-guest static network enforcement:
 - `DNS_VM_GUEST_*` (module-specific override)
 - `BUILD_*` (environment/source-of-truth)
 - `GOVC_VM_GUEST_*` (tool-specific fallback)
+
+Cloud-init bootstrap user-data defaults (for cloud-image flows):
+
+- username: `DNS_VM_GUEST_USERNAME` (fallback to `BUILD_USERNAME`)
+- password: `DNS_CLOUDINIT_PASSWORD` (fallback to `DNS_VM_GUEST_PASSWORD` / `BUILD_PASSWORD`)
+- SSH key: `DNS_CLOUDINIT_PUBLIC_KEY` (fallback to `BUILD_KEY` / `ANSIBLE_KEY`)
+
+Clone source note:
+
+- `DNS_VM_TEMPLATE_NAME` accepts either a VMware template name or a regular VM name to clone from.
+- On ESXi environments where template cloning is not supported for a given object, keep `DNS_VM_OVA_PATH` configured for OVA fallback.
 
 ## Notes
 
