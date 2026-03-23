@@ -81,6 +81,9 @@ For SSH authentication it can:
 - auto-discover Vagrant private keys in `overlays/lab/.vagrant/machines` for `lab`
 
 VM IP resolution prefers `govc vm.ip -v4` and falls back to overlay IPs when needed.
+After create/destroy actions, `govc/provision.sh` also syncs DNS owner records
+(`owner=ha-proxy`) through `overlays/base/scripts/dns/register-hosts.sh` and
+`overlays/base/scripts/dns/unregister-hosts.sh`.
 
 ## Usage Examples
 Install on both lab nodes:

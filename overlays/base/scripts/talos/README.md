@@ -43,27 +43,32 @@ The provisioning wrappers are intentionally small. They call the implementation 
 
 This means a user can stay in the Talos module for day-to-day usage, while still
 knowing that VM creation depends on `govc`.
+The cluster provisioning implementation (`talos/govc/provision-cluster.sh`)
+also syncs owner-scoped DNS records (`owner=talos`) after create/destroy.
 
 ## Required Tools
 
-| Tool       | Required For                                                   | Notes                                                              |
-| ---------- | -------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `talosctl` | Config generation, apply, bootstrap, health checks, kubeconfig | Version should match Talos cluster version                         |
-| `govc`     | Provisioning Talos VMs on ESXi or vSphere                      | Required for `provision-single-node.sh` and `provision-cluster.sh` |
-| `kubectl`  | Cluster validation after bootstrap                             | Usually installed on the controller                                |
-| `helm`     | Post-install add-ons such as Cilium                            | Usually installed on the controller                                |
+These tools should be installed on the controller or workstation used to manage,
+install, configure, and orchestrate Talos provisioning.
+
+| Tool       | Required For                                                   | Notes                                                                           |
+| ---------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `talosctl` | Config generation, apply, bootstrap, health checks, kubeconfig | Version should match Talos cluster version. Usually installed on the controller |
+| `govc`     | Provisioning Talos VMs on ESXi or vSphere                      | Required for `provision-single-node.sh` and `provision-cluster.sh`              |
+| `kubectl`  | Cluster validation after bootstrap                             | Usually installed on the controller                                             |
+| `helm`     | Post-install add-ons such as Cilium                            | Usually installed on the controller                                             |
 
 ## Documentation Map
 
 Use the document that matches your goal:
 
-- [GETTING_STARTED.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/GETTING_STARTED.md)
+- [GETTING_STARTED.md](docs/GETTING_STARTED.md)
   - Start here if you are new to the module.
-- [CLUSTER_GUIDE.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/CLUSTER_GUIDE.md)
+- [CLUSTER_GUIDE.md](docs/CLUSTER_GUIDE.md)
   - Use this for a Talos cluster with multiple control planes and workers.
-- [SINGLE_NODE_GUIDE.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/SINGLE_NODE_GUIDE.md)
+- [SINGLE_NODE_GUIDE.md](docs/SINGLE_NODE_GUIDE.md)
   - Use this for a non-HA Talos environment.
-- [INFRASTRUCTURE_PLAN_EXAMPLE.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/INFRASTRUCTURE_PLAN_EXAMPLE.md)
+- [INFRASTRUCTURE_PLAN_EXAMPLE.md](docs/INFRASTRUCTURE_PLAN_EXAMPLE.md)
   - Use this to plan IPs, DNS, VIPs, VM names, and resource roles before execution.
 
 For cluster-specific intent, continue using:

@@ -87,6 +87,9 @@ declare -a VM_NAMESERVER_ARRAY=()
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
+DNS_REGISTER_SCRIPT="${REPO_ROOT}/overlays/base/scripts/dns/register-hosts.sh"
+DNS_UNREGISTER_SCRIPT="${REPO_ROOT}/overlays/base/scripts/dns/unregister-hosts.sh"
+DNS_OWNER_ID="ha-proxy"
 
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/overlays/base/scripts/functions.sh"
@@ -1043,6 +1046,54 @@ execute_action() {
   done
 }
 
+sync_dns_hosts_for_haproxy() {
+  local dns_domain="${DNS_DOMAIN:-}"
+  local index ordinal vm_name static_ip host_name
+  local -a records=()
+  local -a cmd=()
+
+  if (( ${#VM_STATIC_IP_ARRAY[@]} == 0 )); then
+    log_warn "Skipping DNS sync for owner '${DNS_OWNER_ID}': no static IPs configured."
+    return 0
+  fi
+
+  require_file "${DNS_REGISTER_SCRIPT}"
+  cmd=("${DNS_REGISTER_SCRIPT}" "--env=${ENV_NAME}" "--owner=${DNS_OWNER_ID}")
+  [[ -n "${CUSTOM_VARS_FILE}" ]] && cmd+=("--vars-file=${CUSTOM_VARS_FILE}")
+
+  for ((index = VM_START_INDEX; index < VM_START_INDEX + VM_COUNT; index++)); do
+    ordinal=$((index - VM_START_INDEX + 1))
+    static_ip="${VM_STATIC_IP_ARRAY[$((ordinal - 1))]:-}"
+    [[ -n "${static_ip}" ]] || continue
+    vm_name="$(vm_name_at "${index}")"
+    host_name="${vm_name}"
+    [[ -n "${dns_domain}" ]] && host_name="${vm_name}.${dns_domain}"
+    records+=("${host_name}=${static_ip}")
+  done
+
+  if (( ${#records[@]} == 0 )); then
+    log_warn "Skipping DNS sync for owner '${DNS_OWNER_ID}': no host records were generated."
+    return 0
+  fi
+
+  for host_name in "${records[@]}"; do
+    cmd+=("--record=${host_name}")
+  done
+
+  [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
+  "${cmd[@]}"
+}
+
+cleanup_dns_hosts_for_haproxy() {
+  local -a cmd=()
+
+  require_file "${DNS_UNREGISTER_SCRIPT}"
+  cmd=("${DNS_UNREGISTER_SCRIPT}" "--env=${ENV_NAME}" "--owner=${DNS_OWNER_ID}")
+  [[ -n "${CUSTOM_VARS_FILE}" ]] && cmd+=("--vars-file=${CUSTOM_VARS_FILE}")
+  [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
+  "${cmd[@]}"
+}
+
 main() {
   parse_args "$@"
   validate_base_inputs
@@ -1071,6 +1122,11 @@ main() {
   fi
 
   execute_action
+  if [[ "${ACTION}" == "create" ]]; then
+    sync_dns_hosts_for_haproxy
+  elif [[ "${ACTION}" == "destroy" ]]; then
+    cleanup_dns_hosts_for_haproxy
+  fi
   log_info "Action '${ACTION}' completed successfully."
 }
 

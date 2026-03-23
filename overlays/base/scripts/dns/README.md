@@ -15,6 +15,9 @@ by the reusable module in `infra-gitops/scripts/dnsmasq`.
 - `install.sh`: compatibility wrapper for `../infra-gitops/scripts/dnsmasq/install.sh`
 - `setup.sh`: compatibility wrapper for `../infra-gitops/scripts/dnsmasq/setup.sh`
 - `run-full.sh`: orchestration wrapper (`provision -> install -> setup`)
+- `register-hosts.sh`: register/replace DNS records for a specific owner
+- `unregister-hosts.sh`: remove all DNS records for a specific owner
+- `reconcile-hosts.sh`: merge owner records and apply to dnsmasq
 - `vars.sh`: DNS module defaults (`DNS_VM_*`, `DNS_*`)
 
 ## Scope Boundary
@@ -78,9 +81,32 @@ Record formats supported by wrapper:
 - Compatible: `DNS_A_RECORDS` CSV string (`host=ip,host2=ip2`)
 
 Lab note:
-- `DNS_A_RECORDS_LIST` can be composed from shared Talos variables (for example
-  `TALOS_CONTROL_PLANE_IPS` and `TALOS_WORKER_IPS`) so DNS records stay aligned
-  with cluster topology.
+- Prefer owner-scoped records through `register-hosts.sh` instead of keeping
+  cross-module host lists directly in overlay vars.
+
+## Owner-Based Records Contract
+
+To keep modules decoupled, DNS records are owner-scoped:
+
+- `ha-proxy` owns and updates only HAProxy host records.
+- `talos` owns and updates only Talos API/control-plane/worker records.
+- `dns` module reconciles all owner files into the effective dnsmasq hosts file.
+
+Owner files live in:
+
+- `overlays/<env>/dns/records.d/<owner>.records`
+
+Each line must be:
+
+- `host=ip`
+
+Facade commands:
+
+```bash
+./overlays/base/scripts/dns/register-hosts.sh --env=lab --owner=talos --record=talos-cp-1.infra.lab=192.168.0.61
+./overlays/base/scripts/dns/unregister-hosts.sh --env=lab --owner=talos
+./overlays/base/scripts/dns/reconcile-hosts.sh --env=lab
+```
 
 Optional hosts file (if you prefer file-based records instead of `DNS_A_RECORDS`):
 

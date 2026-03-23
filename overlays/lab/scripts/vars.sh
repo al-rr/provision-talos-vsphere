@@ -75,37 +75,22 @@ export DNS_CLOUDINIT_PUBLIC_KEY="${DNS_CLOUDINIT_PUBLIC_KEY:-${BUILD_KEY}}"
 export DNS_DOMAIN="infra.lab"
 export DNS_LISTEN_ADDRESSES="${DNS_VM_STATIC_IP}"
 export DNS_UPSTREAM_SERVERS="1.1.1.1,8.8.8.8"
-DNS_A_RECORDS_LIST=(
-  "talos-api.${DNS_DOMAIN}=${HAPROXY_VIP}"
-  "${HAPROXY_NODE_1_NAME}.${DNS_DOMAIN}=${HAPROXY_NODE_1_IP}"
-  "${HAPROXY_NODE_2_NAME}.${DNS_DOMAIN}=${HAPROXY_NODE_2_IP}"
-)
+DNS_A_RECORDS_LIST=()
 
 # Talos topology.
 export TALOS_CLUSTER_NAME="talos"
-export TALOS_CLUSTER_ENDPOINT="${HAPROXY_VIP}"
+export TALOS_CLUSTER_ENDPOINT="https://${HAPROXY_VIP}:6443"
 export TALOS_OVA_PATH="https://factory.talos.dev/image/903b2da78f99adef03cbbd4df6714563823f63218508800751560d3bc3557e40/v1.12.4/vmware-amd64.ova"
+export TALOS_INSTALLER_IMAGE="factory.talos.dev/vmware-installer/903b2da78f99adef03cbbd4df6714563823f63218508800751560d3bc3557e40:v1.12.4"
+export TALOS_CONTROL_PLANE_COUNT="3"
+export TALOS_WORKER_COUNT="3"
 export TALOS_CONTROL_PLANE_IPS='["192.168.0.61","192.168.0.62","192.168.0.63"]'
-export TALOS_WORKER_IPS='["192.168.0.71","192.168.0.72"]'
+export TALOS_WORKER_IPS='["192.168.0.71","192.168.0.72","192.168.0.73"]'
 export TALOS_CONTROL_PLANE_NAME_PREFIX="talos-cp"
 export TALOS_WORKER_NAME_PREFIX="talos-worker"
+export TALOS_NODE_INTERFACE="eth0"
 export TALOS_GATEWAY="${NETWORK_GATEWAY}"
 export TALOS_NETMASK_PREFIX="${NETWORK_NETMASK_PREFIX}"
 export TALOS_NAMESERVERS="${NETWORK_NAMESERVERS}"
-export TALOS_CONTROL_PLANE_CONFIG_PATH="overlays/lab/talos/${TALOS_CLUSTER_NAME}/controlplane.yaml"
-export TALOS_WORKER_CONFIG_PATH="overlays/lab/talos/${TALOS_CLUSTER_NAME}/worker.yaml"
-
-# Add Talos node records to DNS_A_RECORDS_LIST from TALOS_* IP lists.
-talos_cp_index=1
-while IFS= read -r talos_cp_ip || [[ -n "${talos_cp_ip}" ]]; do
-  [[ -n "${talos_cp_ip}" ]] || continue
-  DNS_A_RECORDS_LIST+=("${TALOS_CONTROL_PLANE_NAME_PREFIX}-${talos_cp_index}.${DNS_DOMAIN}=${talos_cp_ip}")
-  talos_cp_index=$((talos_cp_index + 1))
-done < <(printf '%s\n' "${TALOS_CONTROL_PLANE_IPS}" | tr -d '[]" ' | tr ',' '\n')
-
-talos_worker_index=1
-while IFS= read -r talos_worker_ip || [[ -n "${talos_worker_ip}" ]]; do
-  [[ -n "${talos_worker_ip}" ]] || continue
-  DNS_A_RECORDS_LIST+=("${TALOS_WORKER_NAME_PREFIX}-${talos_worker_index}.${DNS_DOMAIN}=${talos_worker_ip}")
-  talos_worker_index=$((talos_worker_index + 1))
-done < <(printf '%s\n' "${TALOS_WORKER_IPS}" | tr -d '[]" ' | tr ',' '\n')
+export TALOS_CONTROL_PLANE_CONFIG_PATH="overlays/lab/talos/${TALOS_CLUSTER_NAME}/generated/controlplane.yaml"
+export TALOS_WORKER_CONFIG_PATH="overlays/lab/talos/${TALOS_CLUSTER_NAME}/generated/worker.yaml"

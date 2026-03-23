@@ -60,12 +60,21 @@ VM_FIRMWARE="efi"
 VM_GUEST_OS_TYPE="other3xLinux64Guest"
 VM_NET_ADAPTER="vmxnet3"
 VM_DISK_CONTROLLER="scsi"
+CP_NAME_PREFIX=""
+WORKER_NAME_PREFIX=""
+CP_IPS_RAW=""
+WORKER_IPS_RAW=""
+declare -a CP_STATIC_IPS=()
+declare -a WORKER_STATIC_IPS=()
 declare -a ALL_PATCH_FILES=()
 declare -a CP_PATCH_FILES=()
 declare -a WORKER_PATCH_FILES=()
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
+DNS_REGISTER_SCRIPT="${REPO_ROOT}/overlays/base/scripts/dns/register-hosts.sh"
+DNS_UNREGISTER_SCRIPT="${REPO_ROOT}/overlays/base/scripts/dns/unregister-hosts.sh"
+DNS_OWNER_ID="talos"
 
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/overlays/base/scripts/functions.sh"
@@ -163,6 +172,22 @@ resolve_path_from_repo() {
   fi
 }
 
+normalize_csv_list() {
+  local raw="$1"
+  raw="${raw//[/}"
+  raw="${raw//]/}"
+  raw="${raw//\"/}"
+  raw="${raw// /}"
+  printf '%s\n' "${raw}"
+}
+
+csv_to_array() {
+  local csv="$1"
+  local IFS=','
+  read -r -a _arr <<<"${csv}"
+  printf '%s\n' "${_arr[@]}"
+}
+
 resolve_patch_files() {
   local i
   for i in "${!ALL_PATCH_FILES[@]}"; do
@@ -203,6 +228,14 @@ load_context() {
   WAIT_BOOTSTRAP_TIMEOUT="${WAIT_BOOTSTRAP_TIMEOUT:-600}"
   WAIT_TALOS_API="${WAIT_TALOS_API:-true}"
   WAIT_TALOS_API_TIMEOUT="${WAIT_TALOS_API_TIMEOUT:-300}"
+  CP_NAME_PREFIX="${TALOS_CONTROL_PLANE_NAME_PREFIX:-talos-cp}"
+  WORKER_NAME_PREFIX="${TALOS_WORKER_NAME_PREFIX:-talos-worker}"
+  CP_IPS_RAW="${TALOS_CONTROL_PLANE_IPS:-}"
+  WORKER_IPS_RAW="${TALOS_WORKER_IPS:-}"
+  CP_IPS_RAW="$(normalize_csv_list "${CP_IPS_RAW}")"
+  WORKER_IPS_RAW="$(normalize_csv_list "${WORKER_IPS_RAW}")"
+  mapfile -t CP_STATIC_IPS < <(csv_to_array "${CP_IPS_RAW}")
+  mapfile -t WORKER_STATIC_IPS < <(csv_to_array "${WORKER_IPS_RAW}")
 
   CP_CONFIG_PATH="$(resolve_path_from_repo "${CP_CONFIG_PATH}")"
   WORKER_CONFIG_PATH="$(resolve_path_from_repo "${WORKER_CONFIG_PATH}")"
@@ -263,7 +296,11 @@ vm_exists() {
 vm_name_for_role() {
   local role="$1"
   local index="$2"
-  printf '%s-%s-%d\n' "${CLUSTER_NAME}" "${role}" "${index}"
+  case "${role}" in
+    control-plane) printf '%s-%d\n' "${CP_NAME_PREFIX}" "${index}" ;;
+    worker) printf '%s-%d\n' "${WORKER_NAME_PREFIX}" "${index}" ;;
+    *) printf '%s-%s-%d\n' "${CLUSTER_NAME}" "${role}" "${index}" ;;
+  esac
 }
 
 config_for_index() {
@@ -290,7 +327,7 @@ patched_config_file() {
   local index="$3"
   local current tmp patch_file
   local -a patch_chain=()
-  local cluster_dir patches_dir role_prefix
+  local cluster_dir patches_dir role_prefix named_patch=""
 
   patch_chain+=("${ALL_PATCH_FILES[@]}")
   if [[ "${role}" == "control-plane" ]]; then
@@ -306,6 +343,12 @@ patched_config_file() {
   if [[ -d "${patches_dir}" ]]; then
     [[ -f "${patches_dir}/${role_prefix}-common.patch.yaml" ]] && patch_chain+=("${patches_dir}/${role_prefix}-common.patch.yaml")
     [[ -f "${patches_dir}/${role_prefix}-${index}.patch.yaml" ]] && patch_chain+=("${patches_dir}/${role_prefix}-${index}.patch.yaml")
+    if [[ "${role}" == "control-plane" ]]; then
+      named_patch="${patches_dir}/${CP_NAME_PREFIX}-${index}.patch.yaml"
+    else
+      named_patch="${patches_dir}/${WORKER_NAME_PREFIX}-${index}.patch.yaml"
+    fi
+    [[ -f "${named_patch}" ]] && patch_chain+=("${named_patch}")
   fi
 
   if (( ${#patch_chain[@]} == 0 )); then
@@ -443,6 +486,7 @@ destroy_vm() {
 print_plan() {
   log_info "Talos govc plan env=${ENV_NAME} action=${ACTION}"
   log_info "cluster=${CLUSTER_NAME} cp=${CP_COUNT} worker=${WORKER_COUNT}"
+  log_info "vm-name-prefixes cp=${CP_NAME_PREFIX} worker=${WORKER_NAME_PREFIX}"
   log_info "cp(cpu=${CP_CPU},mem=${CP_MEMORY_MB},disk=${CP_DISK_GB}) worker(cpu=${WORKER_CPU},mem=${WORKER_MEMORY_MB},disk=${WORKER_DISK_GB})"
   log_info "network=${VM_NETWORK} datastore=${VM_DATASTORE} folder=${VM_FOLDER:-<current>} pool=${VM_RESOURCE_POOL:-<current>}"
   if [[ -n "${OVA_PATH}" ]]; then
@@ -536,7 +580,7 @@ collect_bootstrap_ips() {
 
 wait_talos_api_ready() {
   local cluster_dir out_file
-  local deadline now role vm_name ip
+  local deadline now role vm_name ip i
   local pending
   local -a nodes=()
 
@@ -547,10 +591,27 @@ wait_talos_api_ready() {
     return 0
   }
 
-  while read -r role vm_name ip; do
-    [[ -n "${role:-}" && -n "${vm_name:-}" && -n "${ip:-}" ]] || continue
-    nodes+=("${role}|${vm_name}|${ip}")
-  done < "${out_file}"
+  if [[ -s "${out_file}" ]]; then
+    while read -r role vm_name ip; do
+      [[ -n "${role:-}" && -n "${vm_name:-}" && -n "${ip:-}" ]] || continue
+      nodes+=("${role}|${vm_name}|${ip}")
+    done < "${out_file}"
+    log_info "Talos API readiness source: bootstrap DHCP inventory (${out_file})."
+  elif (( ${#CP_STATIC_IPS[@]} > 0 || ${#WORKER_STATIC_IPS[@]} > 0 )); then
+    for ((i = 1; i <= CP_COUNT; i++)); do
+      vm_name="$(vm_name_for_role "control-plane" "${i}")"
+      ip="${CP_STATIC_IPS[$((i - 1))]:-}"
+      [[ -n "${ip}" ]] || continue
+      nodes+=("control-plane-${i}|${vm_name}|${ip}")
+    done
+    for ((i = 1; i <= WORKER_COUNT; i++)); do
+      vm_name="$(vm_name_for_role "worker" "${i}")"
+      ip="${WORKER_STATIC_IPS[$((i - 1))]:-}"
+      [[ -n "${ip}" ]] || continue
+      nodes+=("worker-${i}|${vm_name}|${ip}")
+    done
+    log_info "Talos API readiness source: static overlay IPs (fallback)."
+  fi
 
   (( ${#nodes[@]} > 0 )) || {
     log_warn "Skipping Talos API readiness check: inventory is empty (${out_file})."
@@ -585,6 +646,59 @@ wait_talos_api_ready() {
   done
 }
 
+sync_dns_hosts_for_talos() {
+  local dns_domain="${DNS_DOMAIN:-}"
+  local api_host="${TALOS_API_DNS_NAME:-talos-api}"
+  local host_name="" ip=""
+  local idx=1
+  local -a records=()
+  local -a cmd=()
+
+  require_file "${DNS_REGISTER_SCRIPT}"
+
+  if [[ -n "${HAPROXY_VIP:-}" ]]; then
+    host_name="${api_host}"
+    [[ -n "${dns_domain}" ]] && host_name="${api_host}.${dns_domain}"
+    records+=("${host_name}=${HAPROXY_VIP}")
+  fi
+
+  idx=1
+  for ip in "${CP_STATIC_IPS[@]}"; do
+    [[ -n "${ip}" ]] || continue
+    host_name="${CP_NAME_PREFIX}-${idx}"
+    [[ -n "${dns_domain}" ]] && host_name="${host_name}.${dns_domain}"
+    records+=("${host_name}=${ip}")
+    idx=$((idx + 1))
+  done
+
+  idx=1
+  for ip in "${WORKER_STATIC_IPS[@]}"; do
+    [[ -n "${ip}" ]] || continue
+    host_name="${WORKER_NAME_PREFIX}-${idx}"
+    [[ -n "${dns_domain}" ]] && host_name="${host_name}.${dns_domain}"
+    records+=("${host_name}=${ip}")
+    idx=$((idx + 1))
+  done
+
+  if (( ${#records[@]} == 0 )); then
+    log_warn "Skipping DNS sync for owner '${DNS_OWNER_ID}': no records generated."
+    return 0
+  fi
+
+  cmd=("${DNS_REGISTER_SCRIPT}" "--env=${ENV_NAME}" "--owner=${DNS_OWNER_ID}")
+  for host_name in "${records[@]}"; do
+    cmd+=("--record=${host_name}")
+  done
+  "${cmd[@]}"
+}
+
+cleanup_dns_hosts_for_talos() {
+  local -a cmd=()
+  require_file "${DNS_UNREGISTER_SCRIPT}"
+  cmd=("${DNS_UNREGISTER_SCRIPT}" "--env=${ENV_NAME}" "--owner=${DNS_OWNER_ID}")
+  "${cmd[@]}"
+}
+
 main() {
   parse_args "$@"
   load_context
@@ -596,6 +710,11 @@ main() {
   fi
 
   execute_action
+  if [[ "${ACTION}" == "create" ]]; then
+    sync_dns_hosts_for_talos
+  elif [[ "${ACTION}" == "destroy" ]]; then
+    cleanup_dns_hosts_for_talos
+  fi
   if [[ "${ACTION}" == "create" && "${WAIT_BOOTSTRAP_IPS}" == "true" ]]; then
     collect_bootstrap_ips
     if [[ "${WAIT_TALOS_API}" == "true" ]]; then
