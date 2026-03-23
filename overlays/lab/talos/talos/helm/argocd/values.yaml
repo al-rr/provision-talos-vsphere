@@ -1,0 +1,15 @@
+# Argo CD values for this cluster/environment.
+# Start minimal, then add ingress/OIDC/repo credentials as needed.
+
+server:
+  service:
+    type: ClusterIP
+
+controller:
+  replicas: 1
+
+repoServer:
+  replicas: 1
+
+applicationSet:
+  replicas: 1
