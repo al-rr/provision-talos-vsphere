@@ -378,7 +378,7 @@ resolve_settings() {
   VM_GATEWAY="${VM_GATEWAY:-${DNS_VM_GATEWAY:-${GOVC_VM_GATEWAY:-${TALOS_GATEWAY:-}}}}"
   VM_NETMASK_PREFIX="${VM_NETMASK_PREFIX:-${DNS_VM_NETMASK_PREFIX:-${GOVC_VM_NETMASK_PREFIX:-24}}}"
   VM_NAMESERVERS="${VM_NAMESERVERS:-${DNS_VM_BOOTSTRAP_NAMESERVERS:-${GOVC_VM_NAMESERVERS:-${TALOS_NAMESERVERS:-}}}}"
-  VM_STATIC_INTERFACE="${DNS_VM_STATIC_INTERFACE:-${VM_STATIC_INTERFACE:-${GOVC_VM_STATIC_INTERFACE:-ens160}}}"
+  VM_STATIC_INTERFACE="${DNS_VM_STATIC_INTERFACE:-${VM_STATIC_INTERFACE:-${GOVC_VM_STATIC_INTERFACE:-auto}}}"
   VM_GUEST_USERNAME="${VM_GUEST_USERNAME:-${DNS_VM_GUEST_USERNAME:-${GOVC_VM_GUEST_USERNAME:-${BUILD_USERNAME:-}}}}"
   VM_GUEST_PASSWORD="${VM_GUEST_PASSWORD:-${DNS_VM_GUEST_PASSWORD:-${GOVC_VM_GUEST_PASSWORD:-${BUILD_PASSWORD:-}}}}"
   VM_ENFORCE_GUEST_STATIC_NETWORK="${VM_ENFORCE_GUEST_STATIC_NETWORK:-${DNS_VM_GUEST_STATIC:-${GOVC_VM_ENFORCE_GUEST_STATIC_NETWORK:-auto}}}"
@@ -668,6 +668,7 @@ build_cloud_init_metadata() {
   local static_ip="$2"
   local dns_inline=""
   local ns=""
+  local iface_block=""
 
   for ns in "${VM_NAMESERVER_ARRAY[@]}"; do
     if [[ -n "${dns_inline}" ]]; then
@@ -676,13 +677,27 @@ build_cloud_init_metadata() {
     dns_inline+="${ns}"
   done
 
+  if [[ "${VM_STATIC_INTERFACE}" == "auto" ]]; then
+    iface_block=$(cat <<'EOF_IFACE'
+    primary:
+      match:
+        name: "e*"
+EOF_IFACE
+)
+  else
+    iface_block=$(cat <<EOF_IFACE
+    ${VM_STATIC_INTERFACE}:
+EOF_IFACE
+)
+  fi
+
   cat <<EOF_META
 instance-id: ${vm_name}
 local-hostname: ${vm_name}
 network:
   version: 2
   ethernets:
-    ${VM_STATIC_INTERFACE}:
+${iface_block}
       dhcp4: false
       addresses:
         - ${static_ip}/${VM_NETMASK_PREFIX}
@@ -755,18 +770,39 @@ build_guest_static_network_script() {
   local static_ip="$2"
   local dns_lines=""
   local ns=""
+  local iface_script=""
 
   for ns in "${VM_NAMESERVER_ARRAY[@]}"; do
     dns_lines+="          - ${ns}"$'\n'
   done
 
+  if [[ "${VM_STATIC_INTERFACE}" == "auto" ]]; then
+    iface_script=$(cat <<'EOF_IFACE'
+IFACE="$(ip -o route show to default 2>/dev/null | awk '{print $5; exit}')"
+if [[ -z "${IFACE}" ]]; then
+  IFACE="$(ip -o link show | awk -F': ' '/^[0-9]+: e/ {print $2; exit}')"
+fi
+if [[ -z "${IFACE}" ]]; then
+  echo "Could not auto-detect network interface" >&2
+  exit 1
+fi
+EOF_IFACE
+)
+  else
+    iface_script=$(cat <<EOF_IFACE
+IFACE="${VM_STATIC_INTERFACE}"
+EOF_IFACE
+)
+  fi
+
   cat <<EOF_GUEST
 set -euo pipefail
+${iface_script}
 cat >/tmp/99-govc-static.yaml <<NET
 network:
   version: 2
   ethernets:
-    ${VM_STATIC_INTERFACE}:
+    \${IFACE}:
       dhcp4: false
       addresses:
         - ${static_ip}/${VM_NETMASK_PREFIX}

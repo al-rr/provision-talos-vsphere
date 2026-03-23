@@ -37,6 +37,7 @@ For Ubuntu cloud-image OVA, set bootstrap identity explicitly in overlay vars:
 - `DNS_VM_GUEST_PASSWORD=<password>`
 - `DNS_CLOUDINIT_PUBLIC_KEY=<your-public-key>`
 - `DNS_SSH_USER=<same-user>`
+- `DNS_VM_STATIC_INTERFACE=auto` (recommended default)
 
 When these values are present, provisioning injects cloud-init `user-data` with:
 - user creation
@@ -46,6 +47,7 @@ When these values are present, provisioning injects cloud-init `user-data` with:
 Notes:
 - `ubuntu` is common for Ubuntu cloud images, but not required.
 - You can use your project user (for example `BUILD_USERNAME`) by setting `DNS_VM_GUEST_USERNAME` (or by letting it inherit from `BUILD_USERNAME` when not explicitly set).
+- Keep interface as `auto` when targeting mixed platforms (Vagrant/ESXi/vSphere), because NIC names can change (`ens160`, `ens192`, etc).
 
 Example with lab profile:
 
@@ -153,6 +155,12 @@ Cloud-init bootstrap user-data defaults (for cloud-image flows):
 - username: `DNS_VM_GUEST_USERNAME` (fallback to `BUILD_USERNAME`)
 - password: `DNS_CLOUDINIT_PASSWORD` (fallback to `DNS_VM_GUEST_PASSWORD` / `BUILD_PASSWORD`)
 - SSH key: `DNS_CLOUDINIT_PUBLIC_KEY` (fallback to `BUILD_KEY` / `ANSIBLE_KEY`)
+
+Network interface defaults:
+
+- `DNS_VM_STATIC_INTERFACE` defaults to `auto`.
+- In `auto`, provisioning uses cloud-init/netplan matching (`name: "e*"`) and in-guest fallback detection.
+- You can still override with a fixed interface name when required.
 
 Clone source note:
 
