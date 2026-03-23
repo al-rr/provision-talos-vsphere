@@ -87,10 +87,17 @@ Cluster VM provisioning entrypoint:
 ./overlays/base/scripts/talos/provision-cluster.sh --env=lab create
 ```
 
+Control-plane-only provisioning (workers later):
+
+```bash
+./overlays/base/scripts/talos/provision-cluster.sh --env=lab --worker-count=0 create
+```
+
 Important note:
 
 - This script is a wrapper over `overlays/base/scripts/talos/govc/provision-cluster.sh`.
 - It depends on `govc` and the overlay variables used by the ESXi or vSphere environment.
+- Destroy now removes discovered VMs by prefix (`talos-cp-*` and `talos-worker-*`) to avoid stale nodes when counts change between runs.
 
 ### 5. Generate Talos configuration
 
@@ -138,6 +145,15 @@ Or with explicit values:
   --worker-ips=<worker1-ip>,<worker2-ip>,<worker3-ip>
 ```
 
+Control-plane-only apply:
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh \
+  --env=lab \
+  --mode=apply \
+  --worker-ips='[]'
+```
+
 Important note:
 
 - `cluster-bootstrap.sh` now reconciles the Talos HAProxy frontend/backend automatically for this cluster.
@@ -155,11 +171,33 @@ Bootstrap only:
 ./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=bootstrap
 ```
 
+Control-plane-only bootstrap:
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh \
+  --env=lab \
+  --mode=bootstrap \
+  --worker-ips='[]'
+```
+
 Or run the full sequence in one command:
 
 ```bash
 ./overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=all
 ```
+
+Control-plane-only full flow:
+
+```bash
+./overlays/base/scripts/talos/cluster-bootstrap.sh \
+  --env=lab \
+  --mode=all \
+  --worker-ips='[]'
+```
+
+Important note:
+
+- The bootstrap command is one-time by design. If the cluster is already initialized, the script treats `AlreadyExists` as expected and continues.
 
 ### 8. Configure controller access
 

@@ -35,6 +35,7 @@ MODE="all" # generate|apply|bootstrap|all
 DRY_RUN="false"
 USE_GLOBAL_PATCHES="false"
 ROTATE_SECRETS="false"
+FORCE_GENERATE="false"
 CLUSTER_NAME=""
 CLUSTER_ENDPOINT=""
 GENERATED_DIR=""
@@ -73,6 +74,7 @@ Options:
   --disable-global-patches    Disable shared/global patches (default)
   --global-patches-dir=<path> Directory for enabled global patches
   --rotate-secrets            Regenerate Talos PKI secrets for this cluster
+  --force-generate            Force regeneration of Talos config files
   -n, --dry-run               Show actions without executing
   -h, --help                  Show help
 EOF_USAGE
@@ -98,6 +100,7 @@ parse_args() {
       --disable-global-patches) USE_GLOBAL_PATCHES="false"; shift ;;
       --global-patches-dir=*) GLOBAL_PATCHES_DIR="${1#*=}"; USE_GLOBAL_PATCHES="true"; shift ;;
       --rotate-secrets) ROTATE_SECRETS="true"; shift ;;
+      --force-generate) FORCE_GENERATE="true"; shift ;;
       -h|--help) usage; exit 0 ;;
       *) usage; die "Unknown argument: $1" ;;
     esac
@@ -137,9 +140,15 @@ normalize_csv_list() {
 
 csv_to_array() {
   local csv="$1"
+  [[ -n "${csv}" ]] || return 0
   local IFS=','
+  local -a _arr=()
+  local item=""
   read -r -a _arr <<<"${csv}"
-  printf '%s\n' "${_arr[@]}"
+  for item in "${_arr[@]}"; do
+    [[ -n "${item}" ]] || continue
+    printf '%s\n' "${item}"
+  done
 }
 
 resolve_repo_path() {
@@ -398,6 +407,12 @@ run_generate() {
   worker_base="${GENERATED_DIR}/worker.yaml"
   secrets_file="${GENERATED_DIR}/secrets.yaml"
 
+  if [[ "${FORCE_GENERATE}" != "true" && "${ROTATE_SECRETS}" != "true" \
+     && -f "${cp_base}" && -f "${worker_base}" && -f "${GENERATED_DIR}/talosconfig" && -f "${secrets_file}" ]]; then
+    log_info "Reusing existing generated Talos config bundle in ${GENERATED_DIR} (use --force-generate to regenerate)."
+    return 0
+  fi
+
   while IFS= read -r arg; do
     [[ -n "${arg}" ]] && cp_patch_args+=("${arg}")
   done < <(build_generate_patch_args "control-plane" "${global_patches_dir}" "${cluster_patches_dir}")
@@ -451,6 +466,7 @@ run_apply() {
   local idx=0
   local ip=""
   local cfg=""
+  local talosconfig_path="${GENERATED_DIR}/talosconfig"
 
   if [[ "${DRY_RUN}" != "true" ]]; then
     [[ -f "${cp_base}" ]] || die "Missing generated controlplane config: ${cp_base}. Run --mode=generate first."
@@ -461,7 +477,14 @@ run_apply() {
   for ip in "${CP_IPS[@]}"; do
     cfg="$(patch_for_node "${cp_base}" "controlplane" "${idx}" "${global_patches_dir}" "${cluster_patches_dir}")"
     log_info "Applying control-plane config to ${ip}"
-    run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+    if [[ "${DRY_RUN}" == "true" ]]; then
+      run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+    else
+      if ! talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"; then
+        log_warn "Insecure apply failed for ${ip}, retrying with talosconfig."
+        talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+      fi
+    fi
     [[ "${cfg}" != "${cp_base}" ]] && rm -f "${cfg}"
     idx=$((idx + 1))
   done
@@ -475,7 +498,14 @@ run_apply() {
   for ip in "${WORKER_IPS[@]}"; do
     cfg="$(patch_for_node "${worker_base}" "worker" "${idx}" "${global_patches_dir}" "${cluster_patches_dir}")"
     log_info "Applying worker config to ${ip}"
-    run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+    if [[ "${DRY_RUN}" == "true" ]]; then
+      run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+    else
+      if ! talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"; then
+        log_warn "Insecure apply failed for ${ip}, retrying with talosconfig."
+        talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+      fi
+    fi
     [[ "${cfg}" != "${worker_base}" ]] && rm -f "${cfg}"
     idx=$((idx + 1))
   done
@@ -483,14 +513,33 @@ run_apply() {
 
 run_bootstrap() {
   local talosconfig_path="${GENERATED_DIR}/talosconfig"
+  local bootstrap_output=""
   if [[ "${DRY_RUN}" != "true" ]]; then
     [[ -f "${talosconfig_path}" ]] || die "Missing talosconfig: ${talosconfig_path}. Run --mode=generate first."
   fi
   log_info "Bootstrapping cluster via ${BOOTSTRAP_NODE}"
-  run_or_echo talosctl --talosconfig "${talosconfig_path}" \
-    --nodes "${BOOTSTRAP_NODE}" \
-    --endpoints "${BOOTSTRAP_NODE}" \
-    bootstrap
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    run_or_echo talosctl --talosconfig "${talosconfig_path}" \
+      --nodes "${BOOTSTRAP_NODE}" \
+      --endpoints "${BOOTSTRAP_NODE}" \
+      bootstrap
+    return 0
+  fi
+
+  if ! bootstrap_output="$(
+    talosctl --talosconfig "${talosconfig_path}" \
+      --nodes "${BOOTSTRAP_NODE}" \
+      --endpoints "${BOOTSTRAP_NODE}" \
+      bootstrap 2>&1
+  )"; then
+    if grep -qiE "AlreadyExists|etcd data directory is not empty" <<<"${bootstrap_output}"; then
+      log_warn "Cluster appears already bootstrapped; continuing."
+      return 0
+    fi
+    printf '%s\n' "${bootstrap_output}" >&2
+    return 1
+  fi
+  [[ -n "${bootstrap_output}" ]] && printf '%s\n' "${bootstrap_output}"
 }
 
 run_lb_reconcile() {

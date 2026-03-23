@@ -188,6 +188,26 @@ csv_to_array() {
   printf '%s\n' "${_arr[@]}"
 }
 
+is_ipv4() {
+  local ip="$1"
+  [[ "${ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+  local o1 o2 o3 o4
+  IFS='.' read -r o1 o2 o3 o4 <<<"${ip}"
+  (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 ))
+}
+
+extract_vm_ipv4() {
+  local vm_name="$1"
+  local ip=""
+  ip="$(govc vm.info "${vm_name}" \
+    | awk -F': ' '/IP address:/ {print $2}' \
+    | tr ' ' '\n' \
+    | tr ',' '\n' \
+    | awk 'NF' \
+    | awk '/^([0-9]{1,3}\.){3}[0-9]{1,3}$/ {print; exit}')"
+  printf '%s\n' "${ip}"
+}
+
 resolve_patch_files() {
   local i
   for i in "${!ALL_PATCH_FILES[@]}"; do
@@ -327,7 +347,9 @@ patched_config_file() {
   local index="$3"
   local current tmp patch_file
   local -a patch_chain=()
-  local cluster_dir patches_dir role_prefix named_patch=""
+  local cluster_dir role_prefix named_patch=""
+  local -a candidate_patch_dirs=()
+  local patches_dir=""
 
   patch_chain+=("${ALL_PATCH_FILES[@]}")
   if [[ "${role}" == "control-plane" ]]; then
@@ -339,9 +361,15 @@ patched_config_file() {
   fi
 
   cluster_dir="$(dirname "${CP_CONFIG_PATH}")"
-  patches_dir="${cluster_dir}/patches"
-  if [[ -d "${patches_dir}" ]]; then
+  candidate_patch_dirs+=("${cluster_dir}/patches")
+  candidate_patch_dirs+=("$(dirname "${cluster_dir}")/patches")
+
+  for patches_dir in "${candidate_patch_dirs[@]}"; do
+    [[ -d "${patches_dir}" ]] || continue
     [[ -f "${patches_dir}/${role_prefix}-common.patch.yaml" ]] && patch_chain+=("${patches_dir}/${role_prefix}-common.patch.yaml")
+    if [[ "${role}" == "control-plane" ]]; then
+      [[ -f "${patches_dir}/cp-common.patch.yaml" ]] && patch_chain+=("${patches_dir}/cp-common.patch.yaml")
+    fi
     [[ -f "${patches_dir}/${role_prefix}-${index}.patch.yaml" ]] && patch_chain+=("${patches_dir}/${role_prefix}-${index}.patch.yaml")
     if [[ "${role}" == "control-plane" ]]; then
       named_patch="${patches_dir}/${CP_NAME_PREFIX}-${index}.patch.yaml"
@@ -349,7 +377,7 @@ patched_config_file() {
       named_patch="${patches_dir}/${WORKER_NAME_PREFIX}-${index}.patch.yaml"
     fi
     [[ -f "${named_patch}" ]] && patch_chain+=("${named_patch}")
-  fi
+  done
 
   if (( ${#patch_chain[@]} == 0 )); then
     printf '%s\n' "${src_cfg}"
@@ -502,6 +530,37 @@ print_plan() {
 
 execute_action() {
   local i vm_name cfg
+  local -a discovered=()
+  local vm_path=""
+  local vm_base=""
+
+  # For destroy flows, prefer discovered VMs by prefix so overrides like
+  # --worker-count=0 don't leave stale worker VMs behind.
+  if [[ "${ACTION}" == "destroy" ]]; then
+    mapfile -t discovered < <(govc find / -type m -name "${CP_NAME_PREFIX}-*" 2>/dev/null | sort -V)
+    if (( ${#discovered[@]} == 0 )); then
+      for ((i = 1; i <= CP_COUNT; i++)); do
+        discovered+=("$(vm_name_for_role "control-plane" "${i}")")
+      done
+    fi
+    for vm_path in "${discovered[@]}"; do
+      vm_base="${vm_path##*/}"
+      destroy_vm "${vm_base}"
+    done
+
+    discovered=()
+    mapfile -t discovered < <(govc find / -type m -name "${WORKER_NAME_PREFIX}-*" 2>/dev/null | sort -V)
+    if (( ${#discovered[@]} == 0 )); then
+      for ((i = 1; i <= WORKER_COUNT; i++)); do
+        discovered+=("$(vm_name_for_role "worker" "${i}")")
+      done
+    fi
+    for vm_path in "${discovered[@]}"; do
+      vm_base="${vm_path##*/}"
+      destroy_vm "${vm_base}"
+    done
+    return 0
+  fi
 
   for ((i = 1; i <= CP_COUNT; i++)); do
     vm_name="$(vm_name_for_role "control-plane" "${i}")"
@@ -524,7 +583,7 @@ execute_action() {
 
 collect_bootstrap_ips() {
   local cluster_dir out_file tmp_file
-  local deadline now i vm_name ip
+  local deadline now i vm_name ip fallback_ip
   local total_expected=$((CP_COUNT + WORKER_COUNT))
   local found=0
   declare -A seen_ips=()
@@ -546,8 +605,10 @@ collect_bootstrap_ips() {
 
     for ((i = 1; i <= CP_COUNT; i++)); do
       vm_name="$(vm_name_for_role "control-plane" "${i}")"
-      ip="$(govc vm.info "${vm_name}" | awk -F': ' '/IP address:/ {print $2}' | xargs)"
-      if [[ -n "${ip}" && "${ip}" != "<nil>" ]]; then
+      ip="$(extract_vm_ipv4 "${vm_name}")"
+      fallback_ip="${CP_STATIC_IPS[$((i - 1))]:-}"
+      [[ -z "${ip}" && -n "${fallback_ip}" ]] && ip="${fallback_ip}"
+      if [[ -n "${ip}" && "${ip}" != "<nil>" ]] && is_ipv4 "${ip}"; then
         printf '%s %s %s\n' "control-plane-${i}" "${vm_name}" "${ip}" >> "${tmp_file}"
         seen_ips["${ip}"]=1
       fi
@@ -555,8 +616,10 @@ collect_bootstrap_ips() {
 
     for ((i = 1; i <= WORKER_COUNT; i++)); do
       vm_name="$(vm_name_for_role "worker" "${i}")"
-      ip="$(govc vm.info "${vm_name}" | awk -F': ' '/IP address:/ {print $2}' | xargs)"
-      if [[ -n "${ip}" && "${ip}" != "<nil>" ]]; then
+      ip="$(extract_vm_ipv4 "${vm_name}")"
+      fallback_ip="${WORKER_STATIC_IPS[$((i - 1))]:-}"
+      [[ -z "${ip}" && -n "${fallback_ip}" ]] && ip="${fallback_ip}"
+      if [[ -n "${ip}" && "${ip}" != "<nil>" ]] && is_ipv4 "${ip}"; then
         printf '%s %s %s\n' "worker-${i}" "${vm_name}" "${ip}" >> "${tmp_file}"
         seen_ips["${ip}"]=1
       fi
@@ -594,6 +657,10 @@ wait_talos_api_ready() {
   if [[ -s "${out_file}" ]]; then
     while read -r role vm_name ip; do
       [[ -n "${role:-}" && -n "${vm_name:-}" && -n "${ip:-}" ]] || continue
+      if ! is_ipv4 "${ip}"; then
+        log_warn "Ignoring non-IPv4 bootstrap address for ${vm_name}: ${ip}"
+        continue
+      fi
       nodes+=("${role}|${vm_name}|${ip}")
     done < "${out_file}"
     log_info "Talos API readiness source: bootstrap DHCP inventory (${out_file})."
@@ -700,6 +767,7 @@ cleanup_dns_hosts_for_talos() {
 }
 
 main() {
+  local dns_sync_required=""
   parse_args "$@"
   load_context
   validate_inputs
@@ -710,10 +778,23 @@ main() {
   fi
 
   execute_action
+  dns_sync_required="${TALOS_DNS_SYNC_REQUIRED:-true}"
   if [[ "${ACTION}" == "create" ]]; then
-    sync_dns_hosts_for_talos
+    if [[ "${dns_sync_required}" == "true" ]]; then
+      if ! sync_dns_hosts_for_talos; then
+        log_warn "DNS sync for Talos failed, continuing provisioning flow."
+      fi
+    else
+      log_info "Skipping Talos DNS sync (TALOS_DNS_SYNC_REQUIRED=${dns_sync_required})."
+    fi
   elif [[ "${ACTION}" == "destroy" ]]; then
-    cleanup_dns_hosts_for_talos
+    if [[ "${dns_sync_required}" == "true" ]]; then
+      if ! cleanup_dns_hosts_for_talos; then
+        log_warn "DNS cleanup for Talos failed, continuing destroy flow."
+      fi
+    else
+      log_info "Skipping Talos DNS cleanup (TALOS_DNS_SYNC_REQUIRED=${dns_sync_required})."
+    fi
   fi
   if [[ "${ACTION}" == "create" && "${WAIT_BOOTSTRAP_IPS}" == "true" ]]; then
     collect_bootstrap_ips
