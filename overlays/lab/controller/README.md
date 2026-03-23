@@ -23,8 +23,19 @@ cd /home/vagrant/talos-vsphere-lab
 ## 1) Install talosctl
 
 ```bash
-./overlays/base/scripts/talos/install.sh --env=lab
+./overlays/lab/controller/scripts/install-talosctl.sh
 ```
+
+Optional version pin:
+
+```bash
+./overlays/lab/controller/scripts/install-talosctl.sh --version=v1.12.4
+```
+
+This script also configures:
+- `talosctl` bash completion
+
+Open a new shell (or run `source ~/.bashrc`) to load completion.
 
 ## 2) Install kubectl
 
@@ -81,17 +92,17 @@ talosctl --talosconfig ~/.talos/config \
 ## 6) Prepare Cilium Values Using OCI (No Helm Repo Add)
 
 ```bash
-mkdir -p overlays/lab/talos/talos/cilium
+mkdir -p overlays/lab/talos/talos/helm/cilium
 
 helm show values oci://quay.io/cilium/charts/cilium --version 1.19.1 \
-  > overlays/lab/talos/talos/cilium/values.base.yaml
+  > overlays/lab/talos/talos/helm/cilium/values.base.yaml
 
-cp overlays/lab/talos/talos/cilium/values.base.yaml \
-  overlays/lab/talos/talos/cilium/values.yaml
+cp overlays/lab/talos/talos/helm/cilium/values.base.yaml \
+  overlays/lab/talos/talos/helm/cilium/values.yaml
 ```
 
 Why this is important:
-- Talos cluster bootstrap prepares Kubernetes control plane and workers, but does not install your Day-2 networking stack.
+- Talos cluster bootstrap prepares Kubernetes control plane and workers, but does not install your post-bootstrap networking stack.
 - In the new `talos` cluster flow, we disable default CNI and install Cilium as the cluster CNI.
 - Cilium is consumed from OCI charts, and we keep values under version control before installation.
 - This step runs on the controller host (the operator node), not inside Talos nodes.
@@ -113,7 +124,7 @@ k version --client --output=yaml | sed -n 's/^  gitVersion: //p'
 
 - Keep `talosctl` compatible with Talos node version.
 - Keep `kubectl` close to Kubernetes cluster minor version (supported skew is usually +/- 1 minor).
-- Keep Helm 3 for now in this lab flow (Cilium/Day-2 validation).
+- Keep Helm 3 for now in this lab flow (Cilium post-bootstrap validation).
 - If `~/.kube/config` already exists and is shared with other clusters, prefer using:
 
 ```bash
