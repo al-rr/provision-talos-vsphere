@@ -46,6 +46,11 @@
   configuration model.
 - Treat helper loaders such as `load-*.sh` as internal support scripts rather
   than operator entrypoints.
+- Wrapper entrypoints should accept `--env` (default `lab`) and resolve
+  `overlays/<env>/scripts/vars.sh` automatically when `--vars-file` is not
+  explicitly provided.
+- Pure compatibility wrappers that only `exec` an external script may delegate
+  this behavior to that external implementation.
 - `overlays/prod/scripts/vars.sh` is the default production override file.
 - `overlays/lab/scripts/vars.sh` is the default lab override file.
 - `overlays/lab/scripts/` must contain lab-controller bootstrap assets only.

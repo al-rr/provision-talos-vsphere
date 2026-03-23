@@ -9,7 +9,7 @@ export OVERLAY_ALLOW_LEGACY_ENV="${OVERLAY_ALLOW_LEGACY_ENV:-false}"
 
 # Repository paths
 export BASE_PACKER_DIR="overlays/base/packer"
-export BASE_HAPROXY_TERRAFORM_DIR="overlays/base/terraform/haproxy-lb"
+export BASE_HAPROXY_TERRAFORM_DIR="overlays/base/terraform/talos-lb-lb"
 export BASE_TALOS_TERRAFORM_DIR="overlays/base/terraform/talos"
 export BASE_HAPROXY_ANSIBLE_DIR="overlays/base/ansible/haproxy"
 export BASE_GOVC_DIR="overlays/base/govc"
@@ -17,28 +17,37 @@ export BASE_GOVC_DIR="overlays/base/govc"
 # vSphere Settings
 export VSPHERE_DATACENTER=""
 export VSPHERE_CLUSTER=""
-export VSPHERE_HOST="192.168.0.233"
-export VSPHERE_DATASTORE="DATASTORE_02"
-export VSPHERE_NETWORK="VM Network"
+export VSPHERE_HOST=""
+export VSPHERE_DATASTORE=""
+export VSPHERE_NETWORK=""
 export VSPHERE_FOLDER=""
 export VSPHERE_RESOURCE_POOL=""
 export VSPHERE_SET_HOST_FOR_DATASTORE_UPLOADS="false"
 export VSPHERE_API_TIMEOUT="10"
-export VSPHERE_ENDPOINT="192.168.0.233"
+export VSPHERE_ENDPOINT=""
 export VSPHERE_USERNAME=""
 export VSPHERE_PASSWORD=""
 export VSPHERE_INSECURE_CONNECTION="true"
 
-# Build account
+# Build account (image creation/bootstrap account on guest OS)
 export BUILD_USERNAME=""
 export BUILD_PASSWORD=""
 export BUILD_PASSWORD_ENCRYPTED=""
 export BUILD_KEY=""
 
-# Ansible
-export ANSIBLE_USERNAME=""
+# Generic SSH access identity for remote operations
+export SSH_USER=""
+export SSH_PORT="22"
+export SSH_PRIVATE_KEY_FILE=""
+
+# Ansible access identity (remote automation user + authorized key)
+# Keep independent from BUILD_* because roles are different:
+# - BUILD_*: user created during image build/bootstrap
+# - ANSIBLE_*: user/key used later for remote configuration
+# Default behavior: inherit from SSH_* unless explicitly overridden.
+export ANSIBLE_USERNAME="${ANSIBLE_USERNAME:-${SSH_USER:-}}"
 export ANSIBLE_KEY=""
-export ANSIBLE_PRIVATE_KEY_FILE=""
+export ANSIBLE_PRIVATE_KEY_FILE="${ANSIBLE_PRIVATE_KEY_FILE:-${SSH_PRIVATE_KEY_FILE:-}}"
 export ANSIBLE_HOST_KEY_CHECKING="False"
 
 # Shared Packer settings
@@ -80,9 +89,9 @@ unset GOVC_SCRIPT_DIR
 
 # HAProxy topology and automation
 export HAPROXY_VIP=""
-export HAPROXY_NODE_1_NAME="haproxy-01"
+export HAPROXY_NODE_1_NAME="talos-lb-1"
 export HAPROXY_NODE_1_IP=""
-export HAPROXY_NODE_2_NAME="haproxy-02"
+export HAPROXY_NODE_2_NAME="talos-lb-2"
 export HAPROXY_NODE_2_IP=""
 export HAPROXY_PACKER_TEMPLATE_PATH="${BASE_PACKER_DIR}"
 export HAPROXY_PACKER_OVERRIDE_FILE=""
@@ -97,6 +106,14 @@ if [[ -f "${HAPROXY_SCRIPT_DIR}/vars.sh" ]]; then
   source "${HAPROXY_SCRIPT_DIR}/vars.sh"
 fi
 unset HAPROXY_SCRIPT_DIR
+
+# DNS lifecycle defaults (VM provisioning + dnsmasq settings)
+DNS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/dns" >/dev/null 2>&1 && pwd)"
+if [[ -f "${DNS_SCRIPT_DIR}/vars.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "${DNS_SCRIPT_DIR}/vars.sh"
+fi
+unset DNS_SCRIPT_DIR
 
 # Keepalived lifecycle defaults (module migrated to infra-gitops/scripts/keepalived)
 export KEEPALIVED_SERVICE_NAME="keepalived"
@@ -127,7 +144,7 @@ unset TALOS_SCRIPT_DIR
 
 # HAProxy VM convenience values
 export TF_TEMPLATE_NAME=""
-export TF_VM_NAME="haproxy-lb-01"
+export TF_VM_NAME="talos-lb-lb-01"
 export TF_VM_CPUS="2"
 export TF_VM_MEMORY_MB="4096"
 export TF_VM_DISK_GB="40"
