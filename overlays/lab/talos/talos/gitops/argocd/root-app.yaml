@@ -6,9 +6,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: git@github.com:al-rr/provision-talos-vsphere.git
+    repoURL: git@github.com:ednillibanio/talos-vsphere-gitops.git
     targetRevision: main
-    path: overlays/lab/talos/talos/gitops/argocd/apps
+    path: environments/lab/argocd/apps
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
