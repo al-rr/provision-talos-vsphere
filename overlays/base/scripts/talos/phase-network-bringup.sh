@@ -101,6 +101,31 @@ ensure_namespace() {
     KUBECONFIG="${kubeconfig_file}" kubectl create namespace "${namespace}" >/dev/null
 }
 
+label_namespace_security() {
+  local kubeconfig_file="$1"
+  local namespace="$2"
+  local enforce_level="$3"
+  local audit_level="$4"
+  local warn_level="$5"
+
+  [[ -n "${namespace}" ]] || return 0
+  if [[ -z "${enforce_level}" && -z "${audit_level}" && -z "${warn_level}" ]]; then
+    return 0
+  fi
+
+  local -a cmd=(kubectl label namespace "${namespace}" --overwrite)
+  [[ -n "${enforce_level}" ]] && cmd+=("pod-security.kubernetes.io/enforce=${enforce_level}")
+  [[ -n "${audit_level}" ]] && cmd+=("pod-security.kubernetes.io/audit=${audit_level}")
+  [[ -n "${warn_level}" ]] && cmd+=("pod-security.kubernetes.io/warn=${warn_level}")
+
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} ${cmd[*]}"
+    return 0
+  fi
+
+  KUBECONFIG="${kubeconfig_file}" "${cmd[@]}" >/dev/null
+}
+
 namespace_exists() {
   local kubeconfig_file="$1"
   local namespace="$2"
@@ -130,7 +155,11 @@ main() {
   local chart=""
   local version=""
   local values_file=""
+  local validation_selector=""
   local kubeconfig_file=""
+  local namespace_label_enforce=""
+  local namespace_label_audit=""
+  local namespace_label_warn=""
   local -a extra_namespaces=()
   local -a preflight_created_ns=()
   local ns=""
@@ -151,6 +180,10 @@ main() {
   chart="$(read_release_field "${release_file}" "chart")"
   version="$(read_release_field "${release_file}" "version")"
   values_file="$(read_release_field "${release_file}" "valuesFile")"
+  validation_selector="$(read_release_field "${release_file}" "validationSelector")"
+  namespace_label_enforce="$(read_release_field "${release_file}" "namespaceLabelEnforce")"
+  namespace_label_audit="$(read_release_field "${release_file}" "namespaceLabelAudit")"
+  namespace_label_warn="$(read_release_field "${release_file}" "namespaceLabelWarn")"
 
   [[ -n "${release_name}" ]] || die "releaseName missing in ${release_file}"
   [[ -n "${namespace}" ]] || die "namespace missing in ${release_file}"
@@ -184,6 +217,8 @@ main() {
   # Some Cilium profiles reference extra namespaces (for example cilium-secrets)
   # that must exist before server-side dry-run.
   ensure_namespace "${kubeconfig_file}" "${namespace}"
+  label_namespace_security "${kubeconfig_file}" "${namespace}" \
+    "${namespace_label_enforce}" "${namespace_label_audit}" "${namespace_label_warn}"
   if [[ "${ADDON_NAME}" == "cilium" ]]; then
     mapfile -t extra_namespaces < <(collect_cilium_secret_namespaces "${values_file}")
     for ns in "${extra_namespaces[@]}"; do
@@ -238,11 +273,19 @@ main() {
 
   log_info "Phase 2/4: post-install validations"
   if [[ "${DRY_RUN}" == "true" ]]; then
-    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl -n ${namespace} get pods -l k8s-app=${ADDON_NAME}"
+    if [[ -n "${validation_selector}" ]]; then
+      log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl -n ${namespace} get pods -l ${validation_selector}"
+    else
+      log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl -n ${namespace} get pods"
+    fi
     log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl get nodes"
     log_info "[DRY-RUN] cilium status (if cilium CLI exists)"
   else
-    KUBECONFIG="${kubeconfig_file}" kubectl -n "${namespace}" get pods -l "k8s-app=${ADDON_NAME}"
+    if [[ -n "${validation_selector}" ]]; then
+      KUBECONFIG="${kubeconfig_file}" kubectl -n "${namespace}" get pods -l "${validation_selector}"
+    else
+      KUBECONFIG="${kubeconfig_file}" kubectl -n "${namespace}" get pods
+    fi
     KUBECONFIG="${kubeconfig_file}" kubectl get nodes
     if command -v cilium >/dev/null 2>&1; then
       KUBECONFIG="${kubeconfig_file}" cilium status --wait
