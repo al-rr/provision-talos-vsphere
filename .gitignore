@@ -3,6 +3,7 @@
 .ruby-lsp/
 .env
 .env.old
+overlays/*/scripts/vars.local.sh
 packer/env.local.sh
 packer/**/artifacts/*
 !packer/**/artifacts/.gitkeep

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # @file vars.sh
-# @description Lab overlay environment overrides (source of truth for lab values).
+# @description Lab overlay environment overrides (source of truth for non-sensitive lab defaults).
+#              Sensitive values should live in overlays/lab/scripts/vars.local.sh
+#              (loaded automatically by overlays/base/scripts/functions.sh).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"

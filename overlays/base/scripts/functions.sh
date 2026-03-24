@@ -169,10 +169,12 @@ load_overlay_vars() {
   local repo_root
   local base_vars
   local env_vars
+  local local_vars
 
   repo_root="$(overlay_repo_root)"
   base_vars="${repo_root}/overlays/base/scripts/vars.sh"
   env_vars="${repo_root}/overlays/${env_name}/scripts/vars.sh"
+  local_vars="${repo_root}/overlays/${env_name}/scripts/vars.local.sh"
 
   require_file "${base_vars}"
   # shellcheck disable=SC1090
@@ -183,6 +185,12 @@ load_overlay_vars() {
     source "${env_vars}"
   else
     log_warn "No overlay vars file found for environment '${env_name}' at ${env_vars}"
+  fi
+
+  if [[ -f "${local_vars}" ]]; then
+    log_info "Loading local overlay overrides from ${local_vars}"
+    # shellcheck disable=SC1090
+    source "${local_vars}"
   fi
 
   load_legacy_env_file "${repo_root}"
