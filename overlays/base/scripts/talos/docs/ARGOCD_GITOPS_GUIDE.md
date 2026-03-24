@@ -28,6 +28,13 @@ Install Argo CD first (Helm wrapper already exists):
 ./overlays/base/scripts/talos/argocd.sh --env=lab
 ```
 
+## Security Model For Repository Credentials
+
+- `repo-secret.example.yaml` is only a template.
+- The real SSH private key must be added only by the cluster operator.
+- Do not commit real repository credentials into Git.
+- Keep secret creation as a manual operator step.
+
 Create repository credentials for the private Git repository used by Argo CD:
 
 ```bash
@@ -68,6 +75,37 @@ This allows values to stay in:
 KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig kubectl -n argocd get applications
 KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig kubectl -n argocd get pods
 ```
+
+## UI Access (Recommended: Port-Forward)
+
+Use local port-forward for management UIs instead of exposing them publicly.
+
+Argo CD UI:
+
+```bash
+KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig \
+kubectl -n argocd port-forward svc/argocd-server 8080:443
+```
+
+Open `https://localhost:8080`.
+
+Longhorn UI:
+
+```bash
+KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig \
+kubectl -n longhorn-system port-forward svc/longhorn-frontend 8081:80
+```
+
+Open `http://localhost:8081`.
+
+Prometheus UI:
+
+```bash
+KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig \
+kubectl -n kube-prometheus-stack port-forward svc/kube-prometheus-stack-prometheus 9090:9090
+```
+
+Open `http://localhost:9090`.
 
 ## Notes
 

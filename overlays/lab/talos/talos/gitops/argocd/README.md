@@ -17,6 +17,7 @@ Create repository credentials first if using a private repository:
 ```bash
 cp overlays/lab/talos/talos/gitops/argocd/repo-secret.example.yaml /tmp/repo-secret.yaml
 # Edit /tmp/repo-secret.yaml and replace sshPrivateKey.
+# This step must be done by the operator. Do not commit real keys.
 KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig \
 kubectl apply -f /tmp/repo-secret.yaml
 ```
