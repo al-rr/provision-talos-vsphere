@@ -24,6 +24,9 @@ documented in the guides linked below.
 | `phase-network-bringup.sh`                | Phase 2 orchestration: render, validate, and install addon via Helm | Reusable for `--addon=cilium` and `--addon=argocd`                            |
 | `cilium.sh`                               | Reusable Cilium lifecycle entrypoint                      | Wrapper over `phase-network-bringup.sh --addon=cilium`                         |
 | `argocd.sh`                               | Reusable Argo CD lifecycle entrypoint                     | Wrapper over `phase-network-bringup.sh --addon=argocd`                         |
+| `longhorn.sh`                             | Reusable Longhorn lifecycle entrypoint                    | Wrapper over `phase-network-bringup.sh --addon=longhorn`                       |
+| `cert-manager.sh`                         | Reusable cert-manager lifecycle entrypoint                | Wrapper over `phase-network-bringup.sh --addon=cert-manager`                   |
+| `prometheus-stack.sh`                     | Reusable kube-prometheus-stack lifecycle entrypoint       | Wrapper over `phase-network-bringup.sh --addon=prometheus-stack`               |
 | `sync-kubectl.sh`                         | Sync local kubectl kubeconfig/context                     | Updates `~/.kube/config` from generated cluster kubeconfig                      |
 | `sync-talosctl.sh`                        | Sync local talosctl config                                | Updates `~/.talos/config` with current endpoint and control-plane nodes         |
 | `configure_load_balancer.sh`               | Configure HAProxy backends for Talos control planes      | Reuses the HAProxy module                                                     |
@@ -80,6 +83,10 @@ Use the document that matches your goal:
   - Start here if you are new to the module.
 - [CLUSTER_GUIDE.md](docs/CLUSTER_GUIDE.md)
   - Use this for a Talos cluster with multiple control planes and workers.
+- [LONGHORN_GUIDE.md](docs/LONGHORN_GUIDE.md)
+  - Use this for Longhorn prerequisites, install, and values update flow.
+- [ARGOCD_GITOPS_GUIDE.md](docs/ARGOCD_GITOPS_GUIDE.md)
+  - Use this to move addon lifecycle ownership to Argo CD.
 - [SINGLE_NODE_GUIDE.md](docs/SINGLE_NODE_GUIDE.md)
   - Use this for a non-HA Talos environment.
 - [INFRASTRUCTURE_PLAN_EXAMPLE.md](docs/INFRASTRUCTURE_PLAN_EXAMPLE.md)
