@@ -18,6 +18,7 @@ set -euo pipefail
 # @arg --worker-cpu int Worker vCPUs.
 # @arg --worker-memory-mb int Worker memory (MiB).
 # @arg --worker-disk-gb int Worker disk size (GiB).
+# @arg --worker-extra-disk-gb int Worker extra data disk size (GiB, optional).
 # @arg --cp-config string Control-plane machine config file.
 # @arg --worker-config string Worker machine config file.
 # @arg --iso-path string Datastore-relative Talos ISO path.
@@ -42,6 +43,7 @@ CP_DISK_GB=""
 WORKER_CPU=""
 WORKER_MEMORY_MB=""
 WORKER_DISK_GB=""
+WORKER_EXTRA_DISK_GB=""
 CP_CONFIG_PATH=""
 WORKER_CONFIG_PATH=""
 ISO_DATASTORE_PATH=""
@@ -94,6 +96,7 @@ Options:
       --worker-cpu=<n>           Worker vCPU count
       --worker-memory-mb=<n>     Worker memory MiB
       --worker-disk-gb=<n>       Worker disk GiB
+      --worker-extra-disk-gb=<n> Worker extra data disk GiB (optional)
       --cp-config=<path>         Control-plane machine config file
       --worker-config=<path>     Worker machine config file
       --iso-path=<path>          Datastore-relative Talos ISO path
@@ -136,6 +139,7 @@ parse_args() {
       --worker-cpu=*) WORKER_CPU="${1#*=}"; shift ;;
       --worker-memory-mb=*) WORKER_MEMORY_MB="${1#*=}"; shift ;;
       --worker-disk-gb=*) WORKER_DISK_GB="${1#*=}"; shift ;;
+      --worker-extra-disk-gb=*) WORKER_EXTRA_DISK_GB="${1#*=}"; shift ;;
       --cp-config=*) CP_CONFIG_PATH="${1#*=}"; shift ;;
       --worker-config=*) WORKER_CONFIG_PATH="${1#*=}"; shift ;;
       --iso-path=*) ISO_DATASTORE_PATH="${1#*=}"; shift ;;
@@ -234,6 +238,7 @@ load_context() {
   WORKER_CPU="${WORKER_CPU:-${TALOS_WORKER_CPU:-2}}"
   WORKER_MEMORY_MB="${WORKER_MEMORY_MB:-${TALOS_WORKER_MEMORY_MB:-4096}}"
   WORKER_DISK_GB="${WORKER_DISK_GB:-${TALOS_WORKER_DISK_GB:-40}}"
+  WORKER_EXTRA_DISK_GB="${WORKER_EXTRA_DISK_GB:-${TALOS_WORKER_EXTRA_DISK_GB:-0}}"
   CP_CONFIG_PATH="${CP_CONFIG_PATH:-${TALOS_CONTROL_PLANE_CONFIG_PATH:-}}"
   WORKER_CONFIG_PATH="${WORKER_CONFIG_PATH:-${TALOS_WORKER_CONFIG_PATH:-}}"
   ISO_DATASTORE_PATH="${ISO_DATASTORE_PATH:-${TALOS_ISO_DATASTORE_PATH:-ISOs/talos-v1.12.4-uefi.iso}}"
@@ -275,6 +280,7 @@ validate_inputs() {
   [[ "${WORKER_CPU}" =~ ^[0-9]+$ ]] || die "--worker-cpu must be numeric."
   [[ "${WORKER_MEMORY_MB}" =~ ^[0-9]+$ ]] || die "--worker-memory-mb must be numeric."
   [[ "${WORKER_DISK_GB}" =~ ^[0-9]+$ ]] || die "--worker-disk-gb must be numeric."
+  [[ "${WORKER_EXTRA_DISK_GB}" =~ ^[0-9]+$ ]] || die "--worker-extra-disk-gb must be numeric."
   [[ -n "${VM_DATASTORE}" ]] || die "Datastore is required."
   [[ -n "${VM_NETWORK}" ]] || die "Network is required."
   if [[ -z "${OVA_PATH}" ]]; then
@@ -375,6 +381,9 @@ patched_config_file() {
       named_patch="${patches_dir}/${CP_NAME_PREFIX}-${index}.patch.yaml"
     else
       named_patch="${patches_dir}/${WORKER_NAME_PREFIX}-${index}.patch.yaml"
+      if [[ "${WORKER_EXTRA_DISK_GB}" != "0" && -f "${patches_dir}/longhorn.patch.yaml" ]]; then
+        patch_chain+=("${patches_dir}/longhorn.patch.yaml")
+      fi
     fi
     [[ -f "${named_patch}" ]] && patch_chain+=("${named_patch}")
   done
@@ -426,6 +435,7 @@ create_vm() {
   local nic_device=""
   local import_args=()
   local create_args=(vm.create)
+  local extra_worker_disk_name=""
 
   if vm_exists "${vm_name}"; then
     if [[ "${VM_OVERWRITE}" == "true" ]]; then
@@ -492,6 +502,15 @@ create_vm() {
     govc device.cdrom.insert -vm "${vm_name}" -device "${cdrom_device}" "${iso_full_path}"
   fi
 
+  if [[ "${role}" == "worker" && "${WORKER_EXTRA_DISK_GB}" != "0" ]]; then
+    extra_worker_disk_name="${vm_name}/disk-data"
+    govc vm.disk.create \
+      -vm "${vm_name}" \
+      -ds "${VM_DATASTORE}" \
+      -name "${extra_worker_disk_name}" \
+      -size "${WORKER_EXTRA_DISK_GB}G"
+  fi
+
   if [[ "${VM_POWER_ON}" == "true" ]]; then
     govc vm.power -on "${vm_name}"
   fi
@@ -515,7 +534,7 @@ print_plan() {
   log_info "Talos govc plan env=${ENV_NAME} action=${ACTION}"
   log_info "cluster=${CLUSTER_NAME} cp=${CP_COUNT} worker=${WORKER_COUNT}"
   log_info "vm-name-prefixes cp=${CP_NAME_PREFIX} worker=${WORKER_NAME_PREFIX}"
-  log_info "cp(cpu=${CP_CPU},mem=${CP_MEMORY_MB},disk=${CP_DISK_GB}) worker(cpu=${WORKER_CPU},mem=${WORKER_MEMORY_MB},disk=${WORKER_DISK_GB})"
+  log_info "cp(cpu=${CP_CPU},mem=${CP_MEMORY_MB},disk=${CP_DISK_GB}) worker(cpu=${WORKER_CPU},mem=${WORKER_MEMORY_MB},disk=${WORKER_DISK_GB},extra-disk=${WORKER_EXTRA_DISK_GB})"
   log_info "network=${VM_NETWORK} datastore=${VM_DATASTORE} folder=${VM_FOLDER:-<current>} pool=${VM_RESOURCE_POOL:-<current>}"
   if [[ -n "${OVA_PATH}" ]]; then
     log_info "ova=${OVA_PATH}"
