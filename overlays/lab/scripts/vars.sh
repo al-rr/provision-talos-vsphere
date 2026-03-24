@@ -80,10 +80,14 @@ DNS_A_RECORDS_LIST=()
 # Talos topology.
 export TALOS_CLUSTER_NAME="talos"
 export TALOS_CLUSTER_ENDPOINT="https://${HAPROXY_VIP}:6443"
-export TALOS_OVA_PATH="https://factory.talos.dev/image/903b2da78f99adef03cbbd4df6714563823f63218508800751560d3bc3557e40/v1.12.4/vmware-amd64.ova"
-export TALOS_INSTALLER_IMAGE="factory.talos.dev/vmware-installer/903b2da78f99adef03cbbd4df6714563823f63218508800751560d3bc3557e40:v1.12.4"
+export TALOS_OVA_PATH="https://factory.talos.dev/image/c5ecff40b8990cd2ff7d219fb380ac73c7ef52517b9835f1fc2c4ca31247c921/v1.12.4/vmware-amd64.ova"
+export TALOS_CONTROL_PLANE_INSTALLER_IMAGE="factory.talos.dev/vmware-installer/903b2da78f99adef03cbbd4df6714563823f63218508800751560d3bc3557e40:v1.12.4"
+export TALOS_WORKER_INSTALLER_IMAGE="factory.talos.dev/vmware-installer/c5ecff40b8990cd2ff7d219fb380ac73c7ef52517b9835f1fc2c4ca31247c921:v1.12.4"
+# Backward-compatible fallback consumed by older scripts.
+export TALOS_INSTALLER_IMAGE="${TALOS_WORKER_INSTALLER_IMAGE}"
 export TALOS_CONTROL_PLANE_COUNT="3"
 export TALOS_WORKER_COUNT="3"
+export TALOS_WORKER_EXTRA_DISK_GB="100"
 export TALOS_CONTROL_PLANE_IPS='["192.168.0.61","192.168.0.62","192.168.0.63"]'
 export TALOS_WORKER_IPS='["192.168.0.71","192.168.0.72","192.168.0.73"]'
 export TALOS_DISABLE_DEFAULT_CNI="true"

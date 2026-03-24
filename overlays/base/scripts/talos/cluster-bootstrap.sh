@@ -413,7 +413,8 @@ patch_for_node() {
 run_generate() {
   local global_patches_dir="$1"
   local cluster_patches_dir="$2"
-  local installer_image="${TALOS_INSTALLER_IMAGE:-}"
+  local cp_installer_image="${TALOS_CONTROL_PLANE_INSTALLER_IMAGE:-${TALOS_INSTALLER_IMAGE:-}}"
+  local worker_installer_image="${TALOS_WORKER_INSTALLER_IMAGE:-${TALOS_INSTALLER_IMAGE:-}}"
   local cp_base=""
   local worker_base=""
   local arg=""
@@ -471,10 +472,14 @@ run_generate() {
   [[ -f "${worker_base}" ]] || die "Missing generated worker config: ${worker_base}"
   [[ -f "${GENERATED_DIR}/talosconfig" ]] || die "Missing generated talosconfig: ${GENERATED_DIR}/talosconfig"
 
-  if [[ -n "${installer_image}" ]]; then
-    log_info "Applying installer image override from TALOS_INSTALLER_IMAGE: ${installer_image}"
-    apply_installer_image_override "${cp_base}" "${installer_image}"
-    apply_installer_image_override "${worker_base}" "${installer_image}"
+  if [[ -n "${cp_installer_image}" ]]; then
+    log_info "Applying control-plane installer image override: ${cp_installer_image}"
+    apply_installer_image_override "${cp_base}" "${cp_installer_image}"
+  fi
+
+  if [[ -n "${worker_installer_image}" ]]; then
+    log_info "Applying worker installer image override: ${worker_installer_image}"
+    apply_installer_image_override "${worker_base}" "${worker_installer_image}"
   fi
 }
 
