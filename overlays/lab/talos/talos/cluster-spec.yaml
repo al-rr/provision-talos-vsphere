@@ -10,6 +10,14 @@ spec:
     talos: "v1.12.4"
     kubernetes: "v1.35.0"
     ciliumChart: "1.19.1"
+    argocdChart: "9.4.15"
+    certManagerChart: "1.20.0"
+    prometheusStackChart: "82.13.6"
+    longhornChart: "1.9.0"
+  imageFactory:
+    schematicFile: "overlays/lab/talos/talos/schematic.yaml"
+    controlPlaneInstallerImage: "factory.talos.dev/vmware-installer/903b2da78f99adef03cbbd4df6714563823f63218508800751560d3bc3557e40:v1.12.4"
+    workerInstallerImage: "factory.talos.dev/vmware-installer/c5ecff40b8990cd2ff7d219fb380ac73c7ef52517b9835f1fc2c4ca31247c921:v1.12.4"
 
   access:
     controlPlaneEndpoint: "https://192.168.0.30:6443"
@@ -51,6 +59,7 @@ spec:
           ip: "192.168.0.63"
     workers:
       count: 3
+      workerDataDiskGb: 100
       nodes:
         - name: "talos-worker-1"
           ip: "192.168.0.71"
@@ -93,6 +102,36 @@ spec:
           enabled: false
         hostRoot: /sys/fs/cgroup
 
+  addons:
+    orchestration:
+      script: "overlays/base/scripts/talos/phase-network-bringup.sh"
+      mode: "one addon per execution via --addon=<name>"
+    releases:
+      cilium:
+        releaseFile: "overlays/lab/talos/talos/helm/cilium/release.yaml"
+        namespace: "kube-system"
+        validationSelector: "k8s-app=cilium"
+      certManager:
+        releaseFile: "overlays/lab/talos/talos/helm/cert-manager/release.yaml"
+        namespace: "cert-manager"
+        validationSelector: "app.kubernetes.io/instance=cert-manager"
+        installCRDs: true
+      argocd:
+        releaseFile: "overlays/lab/talos/talos/helm/argocd/release.yaml"
+        namespace: "argocd"
+        validationSelector: "app.kubernetes.io/part-of=argocd"
+      prometheusStack:
+        releaseFile: "overlays/lab/talos/talos/helm/prometheus-stack/release.yaml"
+        namespace: "kube-prometheus-stack"
+        validationSelector: "app.kubernetes.io/instance=kube-prometheus-stack"
+      longhorn:
+        releaseFile: "overlays/lab/talos/talos/helm/longhorn/release.yaml"
+        namespace: "longhorn-system"
+        validationSelector: "app=longhorn-manager"
+      longhornPrerequisites:
+        workerDataMountpoint: "/var/mnt/longhorn"
+        workerPatchFile: "overlays/lab/talos/talos/patches/longhorn.patch.yaml"
+
   controllerPrerequisites:
     tools:
       - talosctl
@@ -113,3 +152,4 @@ spec:
       - "talosctl version against control-plane nodes"
       - "kubectl get nodes -o wide"
       - "Cilium chart template validation before install"
+      - "Addon render + server-side dry-run validation via phase-network-bringup.sh"
