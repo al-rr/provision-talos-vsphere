@@ -170,12 +170,13 @@ main() {
   log_info "Phase 2/1: helm template (mandatory)"
   if [[ "${DRY_RUN}" == "true" ]]; then
     log_info "[DRY-RUN] mkdir -p ${render_dir}"
-    log_info "[DRY-RUN] helm template ${release_name} ${chart} --version ${version} --namespace ${namespace} -f ${values_file} > ${render_file}"
+    log_info "[DRY-RUN] helm template ${release_name} ${chart} --version ${version} --namespace ${namespace} --create-namespace -f ${values_file} > ${render_file}"
   else
     mkdir -p "${render_dir}"
     helm template "${release_name}" "${chart}" \
       --version "${version}" \
       --namespace "${namespace}" \
+      --create-namespace \
       -f "${values_file}" > "${render_file}"
     [[ -s "${render_file}" ]] || die "Rendered file is empty: ${render_file}"
   fi

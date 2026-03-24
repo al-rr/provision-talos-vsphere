@@ -533,32 +533,50 @@ execute_action() {
   local -a discovered=()
   local vm_path=""
   local vm_base=""
+  local destroy_cp_scope="true"
+  local destroy_worker_scope="true"
+
+  if [[ "${ACTION}" == "destroy" ]]; then
+    # Respect explicit counts during destroy to allow safe scoped teardown.
+    # --cp-count=0 means "do not touch control-plane VMs"
+    # --worker-count=0 means "do not touch worker VMs"
+    [[ "${CP_COUNT}" == "0" ]] && destroy_cp_scope="false"
+    [[ "${WORKER_COUNT}" == "0" ]] && destroy_worker_scope="false"
+  fi
 
   # For destroy flows, prefer discovered VMs by prefix so overrides like
   # --worker-count=0 don't leave stale worker VMs behind.
   if [[ "${ACTION}" == "destroy" ]]; then
-    mapfile -t discovered < <(govc find / -type m -name "${CP_NAME_PREFIX}-*" 2>/dev/null | sort -V)
-    if (( ${#discovered[@]} == 0 )); then
-      for ((i = 1; i <= CP_COUNT; i++)); do
-        discovered+=("$(vm_name_for_role "control-plane" "${i}")")
+    if [[ "${destroy_cp_scope}" == "true" ]]; then
+      mapfile -t discovered < <(govc find / -type m -name "${CP_NAME_PREFIX}-*" 2>/dev/null | sort -V)
+      if (( ${#discovered[@]} == 0 )); then
+        for ((i = 1; i <= CP_COUNT; i++)); do
+          discovered+=("$(vm_name_for_role "control-plane" "${i}")")
+        done
+      fi
+      for vm_path in "${discovered[@]}"; do
+        vm_base="${vm_path##*/}"
+        destroy_vm "${vm_base}"
       done
+    else
+      log_info "Skipping control-plane destroy scope (--cp-count=0)."
     fi
-    for vm_path in "${discovered[@]}"; do
-      vm_base="${vm_path##*/}"
-      destroy_vm "${vm_base}"
-    done
 
-    discovered=()
-    mapfile -t discovered < <(govc find / -type m -name "${WORKER_NAME_PREFIX}-*" 2>/dev/null | sort -V)
-    if (( ${#discovered[@]} == 0 )); then
-      for ((i = 1; i <= WORKER_COUNT; i++)); do
-        discovered+=("$(vm_name_for_role "worker" "${i}")")
+    if [[ "${destroy_worker_scope}" == "true" ]]; then
+      discovered=()
+      mapfile -t discovered < <(govc find / -type m -name "${WORKER_NAME_PREFIX}-*" 2>/dev/null | sort -V)
+      if (( ${#discovered[@]} == 0 )); then
+        for ((i = 1; i <= WORKER_COUNT; i++)); do
+          discovered+=("$(vm_name_for_role "worker" "${i}")")
+        done
+      fi
+      for vm_path in "${discovered[@]}"; do
+        vm_base="${vm_path##*/}"
+        destroy_vm "${vm_base}"
       done
+    else
+      log_info "Skipping worker destroy scope (--worker-count=0)."
     fi
-    for vm_path in "${discovered[@]}"; do
-      vm_base="${vm_path##*/}"
-      destroy_vm "${vm_base}"
-    done
     return 0
   fi
 
