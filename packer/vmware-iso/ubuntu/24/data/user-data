@@ -3,7 +3,7 @@ autoinstall:
   version: 1
   identity:
     hostname: ubuntu-24-x86-64
-    username: ejunior
+    username: build
     password: '$6$rounds=4096$5CU3LEj/MQvbkfPb$LmKEF9pCfU8R.dA.GemgE/8GT6r9blge3grJvdsVTMFKyLEQwzEF3SGWqAzjawY/XHRpWj4fOiLBrRyxJhIRJ1'
   early-commands:
     # otherwise packer tries to connect and exceed max attempts:
@@ -17,7 +17,7 @@ autoinstall:
       if [ -f /target/etc/netplan/00-installer-config.yaml ]; then
         sed -i "s/dhcp4: true/&\n      dhcp-identifier: mac/" /target/etc/netplan/00-installer-config.yaml
       fi
-    - echo 'ejunior ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/ejunior
+    - echo 'build ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/build
     # Enable hyper-v daemons only if using hyper-v virtualization
     - |
       if [ $(virt-what) == "hyperv" ]; then

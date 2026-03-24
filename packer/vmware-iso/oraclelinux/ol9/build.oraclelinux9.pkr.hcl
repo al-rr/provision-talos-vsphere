@@ -71,7 +71,7 @@ source "vmware-iso" "oraclelinux-9" {
 
 #   communicator = "ssh"
 #   ssh_username = "packer"
-#   ssh_password = "VMw@re123!"
+#   ssh_password = "CHANGE_ME"
 #   ssh_timeout  = "30m"
 
 #   # Configurações de hardware

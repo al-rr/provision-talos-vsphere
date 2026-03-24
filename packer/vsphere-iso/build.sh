@@ -21,7 +21,7 @@
 # @flag --help,-h Show usage.
 #
 # @example
-#   VSPHERE_PASSWORD='Senha@123' ./packer/vsphere-iso/build.sh --env=lab --vsphere-username=root --action=validate
+#   VSPHERE_PASSWORD='CHANGE_ME' ./packer/vsphere-iso/build.sh --env=lab --vsphere-username=root --action=validate
 # @example
 #   ./packer/vsphere-iso/build.sh --env=lab --action=build --vars-file=/tmp/custom.pkrvars.hcl
 

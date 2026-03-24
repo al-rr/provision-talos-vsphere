@@ -27,7 +27,7 @@ Validate profile:
   --profile=ubuntu-24 \
   --env=lab \
   --vsphere-username=root \
-  --vsphere-password='Senha@123' \
+  --vsphere-password='CHANGE_ME' \
   --build-username=vagrant \
   --build-password=vagrant \
   --action=validate
@@ -40,7 +40,7 @@ Build image:
   --profile=ubuntu-24 \
   --env=lab \
   --vsphere-username=root \
-  --vsphere-password='Senha@123' \
+  --vsphere-password='CHANGE_ME' \
   --build-username=vagrant \
   --build-password=vagrant \
   --action=build
