@@ -1,0 +1,11 @@
+---
+- name: Draft placeholder for HAProxy VM lifecycle
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Stop unsupported draft workflow
+      ansible.builtin.fail:
+        msg: >-
+          Draft playbook only. Use the HAProxy overlay documentation for the supported
+          VM lifecycle path and use provision_haproxy.yml for in-guest HAProxy configuration.

@@ -1,0 +1,19 @@
+---
+- name: Ensure Issue Certificate Directory Exists
+  file:
+    path: "{{ issue_ca_trust_path }}"
+    state: directory
+    mode: "0755"
+
+- name: Push Root CA from Controller to Managed Host
+  become: true
+  copy: 
+    src: "{{ ca_root_crt }}"
+    dest: "{{ issue_ca_trust_path }}/{{ ca_root_name }}.crt"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Update Root CA Trust
+  become: true
+  command: update-ca-certificates

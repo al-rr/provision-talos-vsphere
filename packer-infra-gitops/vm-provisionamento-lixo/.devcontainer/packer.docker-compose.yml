@@ -1,0 +1,11 @@
+services:
+  packer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: packer-oraclelinux
+    volumes:
+      - .:/workspace
+    environment:
+      - PACKER_PLUGIN_PATH=/workspace/.packer.d/plugins
+    command: ["packer", "init", "."]

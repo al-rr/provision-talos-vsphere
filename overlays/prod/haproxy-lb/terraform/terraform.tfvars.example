@@ -1,0 +1,7 @@
+# Environment-specific example overrides for the shared HAProxy Terraform module.
+# Prefer overlays/prod/scripts/vars.sh for active workflows.
+
+vm_name         = "haproxy-lb-01"
+vm_ipv4_address = "172.17.20.91"
+vm_ipv4_gateway = "172.17.20.1"
+vm_dns_servers  = ["172.17.20.10", "172.17.20.11"]

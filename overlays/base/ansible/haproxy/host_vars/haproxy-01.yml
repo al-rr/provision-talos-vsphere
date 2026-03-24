@@ -1,0 +1,9 @@
+# vrrp_interval: 2
+# vrrp_debug: 2
+# vrrp_interface: eth1
+# vrrp_state: MASTER
+# vrrp_priority: 99
+
+keepalived_state: MASTER          # MASTER or BACKUP - adjust per host/group_vars
+keepalived_interface: eth1        # interface carrying the VIP
+keepalived_priority: 100          # priority (MASTER > BACKUP)

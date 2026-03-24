@@ -1,0 +1,7 @@
+[haproxy]
+haproxy-01 ansible_host=172.17.20.181
+haproxy-02 ansible_host=172.17.20.182
+
+; [loadbalancers]
+; ha01 ansible_host=ec2-52-50-164-246.eu-west-1.compute.amazonaws.com
+; ha02 ansible_host=ec2-52-48-101-228.eu-west-1.compute.amazonaws.com

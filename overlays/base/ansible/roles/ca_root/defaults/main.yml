@@ -1,0 +1,40 @@
+---
+ca_root_path: "/etc/ssl/ownca"
+ca_root_name: "root"
+ca_root_key: "{{ ca_root_path }}/{{ ca_root_name }}.key"
+ca_root_crt: "{{ ca_root_path }}/{{ ca_root_name }}.crt"
+ca_root_csr: "{{ ca_root_path }}/{{ ca_root_name }}.csr"
+ca_root_force_recreate: false
+ca_country: "BR"
+ca_state: "Roraima"
+ca_locality: "Boa Vista"
+ca_org: "My Company"
+ca_ou: "IT"
+ca_email: "it@example.com"
+ca_common_name: "Local Test CA"
+issue_ca_path: "/etc/ssl/certs"
+issue_ca_trust_path: "/usr/local/share/ca-certificates"
+
+# Diretório remoto onde serão instalados os certificados
+issue_cert_name: "{{ inventory_hostname }}"
+issue_cert_path: "/etc/ssl/certs"
+issue_key_path: "/etc/ssl/private"
+
+# Arquivos do certificado
+issue_cert_key: "{{ issue_key_path }}/{{ issue_cert_name }}.key"
+issue_cert_csr: "{{ issue_cert_path }}/{{ issue_cert_name }}.csr"
+issue_cert_crt: "{{ issue_cert_path }}/{{ issue_cert_name }}.crt"
+
+# Dados do certificado
+issue_cert_common_name: "{{ inventory_hostname }}"
+issue_cert_sans: []
+issue_cert_country: "BR"
+issue_cert_locality_name: "Boa Vista"
+issue_cert_organization_name: "My Company"
+issue_cert_organizational_unit_name : "TI"
+issue_cert_email: "test@mycompany.com"
+
+
+
+# Forçar recriação
+issue_cert_force_recreate: false

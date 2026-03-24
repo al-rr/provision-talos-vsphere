@@ -1,0 +1,9 @@
+services:
+  packer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: packer-oraclelinux
+    volumes:
+      - ./:/workspace
+    working_dir: /workspace

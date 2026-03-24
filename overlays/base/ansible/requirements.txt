@@ -1,0 +1,9 @@
+# Toolchain de desenvolvimento (ansible-lint, ansible-navigator, molecule, etc.)
+ansible-dev-tools>=24.0,<26.0
+# Mantém o core na linha 2.16.x (sem avançar para novas minors)
+ansible-core~=2.16.0
+ansible-creator>=24.0,<26.0
+# Evita avanço para majors mais novas dessas ferramentas
+ansible-lint>=25.11,<26.0
+ansible-navigator>=25.11,<26.0
+jinja2==3.1.6

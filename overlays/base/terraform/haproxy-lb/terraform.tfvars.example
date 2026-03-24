@@ -1,0 +1,23 @@
+vsphere_server               = "192.168.0.231"
+vsphere_user                 = "administrator@vsphere.local"
+vsphere_password             = "CHANGE_ME"
+vsphere_allow_unverified_ssl = true
+
+datacenter    = "ALRR"
+cluster       = "Asgard"
+resource_pool = ""
+datastore     = "datastore-sata-01"
+network       = "LAN"
+folder        = "/ALRR/vm/talos-prod"
+
+template_name = "linux-ubuntu-24.04-lts-template"
+
+vm_name         = "haproxy-lb-01"
+vm_cpus         = 2
+vm_memory_mb    = 4096
+vm_disk_gb      = 40
+vm_ipv4_address = "172.17.20.91"
+vm_ipv4_prefix  = 24
+vm_ipv4_gateway = "172.17.20.1"
+vm_dns_servers  = ["172.17.20.10", "172.17.20.11"]
+vm_domain       = "infra.local"

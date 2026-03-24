@@ -1,0 +1,9 @@
+---
+
+- name: Include task to install Keepalived
+  include_tasks: install.yml
+  when: keepalived_install | default(false)
+
+- name: Include task to configure Keepalived
+  include_tasks: config.yml
+  when: keepalived_configure | default(false)

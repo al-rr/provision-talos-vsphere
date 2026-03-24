@@ -1,32 +1,103 @@
-# vSphere Talos Bootstrap
+# provision-talos-vsphere
 
-## Requirements
+This repository provisions a Talos Linux cluster for vSphere or standalone ESXi
+with an overlay-first automation model. `overlays/base` is the canonical
+automation layer. `overlays/lab` and `overlays/prod` carry environment-specific
+overrides and bootstrap assets.
 
-* VMware Workstation instalado no **host (Windows 10)**.
-* Acesso com **privilégios de administrador** no Windows (vários comandos precisam de prompt elevado).
-* Rede entre host e guest funcionando (host-only ou NAT). Confirme que você consegue **pingar** o host a partir do guest.
-* Terminal no guest com `curl`/`nc` ou similares para testes.
+## Purpose
 
-## Steps
+- Validate the operating model on standalone ESXi first.
+- Keep the production path aligned with the same base automation.
+- Use `govc + Ansible` for the current HAProxy path.
+- Use `Terraform + talosctl` for the Talos VM lifecycle and generated machine
+  configuration flow.
 
-- set GOVC variables
-- run script `00-setup.sh` to install `GOVCM` and `talosctl`
-- run bootstrap.sh to create cluster Kubernetes
+## Source Of Truth
 
-## Variables
+- Repository roadmap: [`agenda.md`](agenda.md)
+- Repository rules: [`docs/policies/`](docs/policies/)
+- Repo-specific architecture and operator context:
+  [`docs/devops/platform-automation-architecture.md`](docs/devops/platform-automation-architecture.md)
+- Shared defaults: [`overlays/base/scripts/vars.sh`](overlays/base/scripts/vars.sh)
+- Shared helpers: [`overlays/base/scripts/functions.sh`](overlays/base/scripts/functions.sh)
 
-## Lab Environment
+## Repository Layout
 
-- set variables values in Vagrantfile
-- run `vagrant validate .`
-- run vagrant up to start guest machine
-- when the guest is uping, the script 00-setup.sh is executed.
-- access the guest: vagrant ssh
-- - run bootstrap.sh to create cluster Kubernetes
+- `overlays/base/conf/`: shared config inputs and reusable templates.
+- `overlays/base/scripts/`: canonical shell entrypoints and helper libraries.
+- `overlays/base/ansible/`: shared HAProxy Ansible automation.
+- `overlays/base/packer/`: shared HAProxy image build inputs.
+- `overlays/base/terraform/`: shared Terraform for HAProxy and Talos.
+- `overlays/base/govc/`: shared GOVC helpers, including HAProxy VM provisioning.
+- `overlays/lab/`: lab controller bootstrap assets, lab vars, and validation support.
+- `overlays/prod/`: production overrides such as topology values and Talos patches.
 
+## Variable Model
 
-- marcar efi
-- colocar disk.enableUUID=1
-- remover disco removível
+Load variables in this order:
 
-talosctl apply-config --insecure --nodes 192.168.0.250 --file worker.yaml --patch @../worker.patch.yaml
+1. `overlays/base/scripts/vars.sh`
+2. `overlays/<env>/scripts/vars.sh`
+
+Root `.env` files are legacy compatibility only. They are not the active
+configuration contract.
+
+## Execution Context
+
+- Use Git Bash as the default operator terminal.
+- Run `govc` from the Windows host.
+- Run Ansible from the Vagrant-based lab controller.
+- Use [`overlays/lab/Vagrantfile`](overlays/lab/Vagrantfile) to bootstrap the
+  lab controller environment.
+
+## Canonical Entry Points
+
+### HAProxy
+
+```bash
+./overlays/base/scripts/haproxy-packer-build.sh --env=prod --validate-only
+./overlays/base/scripts/haproxy-ansible.sh --env=prod --syntax-check
+./overlays/base/scripts/haproxy-ansible.sh --env=prod
+./overlays/base/scripts/haproxy-terraform.sh --env=prod
+./overlays/base/scripts/haproxy-terraform.sh --env=prod --apply
+```
+
+Use the Terraform path for HAProxy as a draft or future-facing path until the
+VIP automation gap is closed.
+
+### Talos
+
+```bash
+./overlays/base/scripts/talos-terraform.sh --env=prod
+./overlays/base/scripts/talos-terraform.sh --env=prod --apply
+```
+
+## Architecture Notes
+
+- HAProxy target topology is `2x HAProxy + VIP`.
+- The Kubernetes endpoint is `https://<endpoint>:6443`.
+- `talosctl` version must be compatible with the Talos cluster version (same major/minor; preferably same exact tag).
+- Talos API administrative reachability on `:50000` must be documented
+  separately from the Kubernetes endpoint.
+- Talos secrets and generated machine configuration stay outside Terraform
+  state and are managed with `talosctl`.
+- Lab assets are for local validation and controller bootstrap. They are not
+  the production source of truth.
+
+## Validation
+
+```bash
+make lint-sh
+cd overlays/base/terraform/haproxy-lb && terraform validate
+cd overlays/base/terraform/talos && terraform validate
+```
+
+## Upstream References
+
+- Talos production notes:
+  <https://docs.siderolabs.com/talos/v1.12/getting-started/prodnotes>
+- talosctl endpoints and nodes:
+  <https://docs.siderolabs.com/talos/v1.12/learn-more/talosctl>
+- Talos network connectivity:
+  <https://docs.siderolabs.com/talos/v1.12/learn-more/talos-network-connectivity>

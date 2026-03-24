@@ -1,0 +1,12 @@
+---
+- name: Include task to create CA root certificate
+  include_tasks: create_ca_root.yml
+  when: create_ca_root | default(false)
+
+- name: Include task to copy CA root certificate to target host
+  include_tasks: copy_ca_root_crt.yml
+  when: copy_ca_root_crt | default(false)
+
+- name: Include task to generate certificate for target host
+  include_tasks: generate_issue_cert.yml
+  when: generate_issue_cert | default(false)

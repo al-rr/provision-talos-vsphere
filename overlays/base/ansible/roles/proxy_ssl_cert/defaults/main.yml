@@ -1,0 +1,16 @@
+ssl_cert_name: nginx-proxy
+ssl_common_name: "infra.local"
+ssl_provider: selfsigned
+
+ssl_sans:
+  - "DNS:web-01.infra.local"
+  - "DNS:web-02.infra.local"
+  - "DNS:nginx-proxy-01.infra.local"
+  - "DNS:nginx-proxy-02.infra.local"
+  - "DNS:nginx-proxy-03.infra.local"
+  - "IP:172.17.20.101"
+  - "IP:172.17.20.102"
+  - "IP:172.17.20.103"
+
+ssl_cert_path: /etc/ssl/certs
+ssl_key_path: /etc/ssl/private

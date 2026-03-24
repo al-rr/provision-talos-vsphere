@@ -1,0 +1,16 @@
+---
+- name: Copy SSH public key to remote hosts
+  hosts: all  
+  become: true
+  vars:
+    ansible_connection: ssh
+    ansible_ssh_pass: "vagrant"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+  tasks:
+    - name: Add public key to remote authorized_keys
+      ansible.posix.authorized_key:
+        # user: "{{ ansible_user | default('vagrant') }}"
+        user: "vagrant"
+        state: present
+        key: "{{ lookup('file', '/home/vagrant/.ssh/id_ed25519.pub') }}"
+        exclusive: yes
