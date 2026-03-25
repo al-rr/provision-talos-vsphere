@@ -16,7 +16,7 @@ documented in the guides linked below.
 
 | Script                                     | Purpose                                                  | Notes                                                                         |
 | ------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `cluster.sh`                               | Unified cluster lifecycle entrypoint                     | Actions: `generate`, `provision`, `apply-config`, `bootstrap`, `apply-cluster-config`, `install-addons`, `sync-access` |
+| `cluster.sh`                               | Unified cluster lifecycle entrypoint                     | Actions: `create-project`, `generate`, `provision`, `apply-config`, `bootstrap`, `apply-cluster-config`, `install-addons`, `sync-access` |
 | `install.sh`                               | Install or upgrade `talosctl`                            | Local or remote execution                                                     |
 | `provision-single-node.sh`                 | Provision a non-HA Talos node                            | Thin wrapper over `overlays/base/scripts/talos/govc/provision-single-node.sh` |
 | `provision-cluster.sh`                     | Provision a Talos cluster topology                       | Thin wrapper over `overlays/base/scripts/talos/govc/provision-cluster.sh`     |
@@ -67,8 +67,8 @@ for `kubectl` and `talosctl` (disable with `--skip-sync-access`).
 
 ## Unified Entry Point
 
-Use `cluster.sh` as the environment-agnostic orchestrator when you want one
-stable CLI contract:
+Use `cluster.sh` as the project-oriented orchestrator with one stable CLI
+contract:
 
 ```bash
 ./overlays/base/scripts/talos/cluster.sh <action> [options]
@@ -76,6 +76,7 @@ stable CLI contract:
 
 Supported actions:
 
+- `create-project`
 - `generate`
 - `provision`
 - `apply-config`
@@ -86,6 +87,7 @@ Supported actions:
 
 Recommended execution order:
 
+0. `create-project`
 1. `generate`
 2. `provision`
 3. `apply-config`
@@ -106,8 +108,9 @@ Why `apply-cluster-config` exists:
 Important:
 
 - `cluster.sh` reuses existing scripts. It does not replace module internals.
-- You can pass `--vars-file=<path>` to target any overlay/project path without
-  hard-coding `lab` or `prod`.
+- Preferred mode is `--project-dir=<path>`.
+- `--vars-file=<path>` remains available for advanced/manual flows.
+- `--env` is removed from `cluster.sh`; use `--project-dir` instead.
 
 ## Required Tools
 

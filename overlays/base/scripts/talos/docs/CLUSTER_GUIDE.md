@@ -83,6 +83,7 @@ Current behavior note:
 Unified entrypoint that orchestrates existing module scripts with explicit
 actions:
 
+- `create-project`
 - `generate`
 - `provision`
 - `apply-config`
@@ -93,6 +94,7 @@ actions:
 
 Recommended `cluster.sh` execution order:
 
+0. `create-project`
 1. `generate`
 2. `provision`
 3. `apply-config`
@@ -101,9 +103,18 @@ Recommended `cluster.sh` execution order:
 6. `apply-cluster-config`
 7. `install-addons` (optional extras)
 
-It supports `--vars-file` so cluster generation/provisioning can target any
-path (for example `overlays/lab/...` or `overlays/prod/...`) without changing
-script internals.
+`cluster.sh` is project-dir first:
+
+- Use `--project-dir=<path-to-cluster-project>` in normal operation.
+- `--vars-file` remains available for manual/advanced flows.
+- `--env` is removed from `cluster.sh`.
+
+Example:
+
+```bash
+./overlays/base/scripts/talos/cluster.sh create-project --project-dir=overlays/lab/talos/talos-dev
+./overlays/base/scripts/talos/cluster.sh generate --project-dir=overlays/lab/talos/talos-dev
+```
 
 ### `phase-cluster-ready.sh`
 
@@ -191,13 +202,13 @@ Optional baseline extension:
 Command:
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh apply-cluster-config --env=lab
+./overlays/base/scripts/talos/cluster.sh apply-cluster-config --project-dir=overlays/lab/talos/talos
 ```
 
 With explicit list:
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh apply-cluster-config --env=lab --addons='["cilium","longhorn"]'
+./overlays/base/scripts/talos/cluster.sh apply-cluster-config --project-dir=overlays/lab/talos/talos --addons='["cilium","longhorn"]'
 ```
 
 Important:

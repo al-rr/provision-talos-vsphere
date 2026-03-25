@@ -51,10 +51,10 @@ Examples:
   $(basename "$0") generate --project-dir=overlays/lab/talos/talos-dev
   $(basename "$0") provision --project-dir=overlays/lab/talos/talos-dev
   $(basename "$0") apply-config --project-dir=overlays/lab/talos/talos-dev
-  $(basename "$0") bootstrap
-  $(basename "$0") apply-cluster-config --addons='[\"cilium\",\"longhorn\"]'
-  $(basename "$0") install-addons --addon=cilium
-  $(basename "$0") sync-access
+  $(basename "$0") bootstrap --project-dir=overlays/lab/talos/talos-dev
+  $(basename "$0") apply-cluster-config --project-dir=overlays/lab/talos/talos-dev --addons='[\"cilium\",\"longhorn\"]'
+  $(basename "$0") install-addons --project-dir=overlays/lab/talos/talos-dev --addon=cilium
+  $(basename "$0") sync-access --project-dir=overlays/lab/talos/talos-dev
 EOF_USAGE
 }
 
