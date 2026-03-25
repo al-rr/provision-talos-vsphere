@@ -77,6 +77,26 @@
 - Prefer keeping reusable operational guides close to the module that provides
   the behavior.
 
+## Documentation Taxonomy
+
+- Use `README.md` as the entrypoint map, not a full runbook.
+- Use `GUIDE` documents for end-to-end flows with strict execution order and
+  decision points. A guide should answer "what to run first, second, and why".
+- Use `HOWTO` documents for focused tasks, such as "add one worker",
+  "rotate certificates", or "update addon values". A how-to should not repeat
+  full cluster lifecycle steps.
+- Use SOP (standard operating procedure) documents for repeatable operations
+  with checks and rollback notes. SOPs should state pre-checks, execution
+  commands, validation steps, and rollback path.
+- Use deployment plan documents for environment intent and values, not command
+  tutorials.
+- Keep docs user-facing and reproducible: every operational command in docs
+  should be runnable from the documented context.
+- When a script behavior changes, update the nearest owning document in the
+  same change set.
+- Avoid mixing reusable module behavior and environment-specific values in a
+  single document unless the file is explicitly an environment runbook.
+
 ## Git
 
 - Prefer Git Bash for Git operations when it works in the environment.

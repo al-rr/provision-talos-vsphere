@@ -88,3 +88,8 @@ Supporting modules:
 - `infra-gitops/scripts/dnsmasq/README.md`
 - [HAProxy](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/ha-proxy/README.md)
 - [Controller guide](/home/vagrant/talos-vsphere-lab/overlays/lab/controller/README.md)
+
+Operational how-tos:
+
+- [HOWTO_ADD_WORKERS.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/HOWTO_ADD_WORKERS.md)
+- [HOWTO_RECREATE_CLUSTER.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/HOWTO_RECREATE_CLUSTER.md)

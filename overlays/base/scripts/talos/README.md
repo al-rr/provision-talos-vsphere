@@ -85,6 +85,10 @@ Use the document that matches your goal:
   - Use this for a Talos cluster with multiple control planes and workers.
 - [LONGHORN_GUIDE.md](docs/LONGHORN_GUIDE.md)
   - Use this for Longhorn prerequisites, install, and values update flow.
+- [HOWTO_ADD_WORKERS.md](docs/HOWTO_ADD_WORKERS.md)
+  - Use this to scale worker nodes only on an existing cluster.
+- [HOWTO_RECREATE_CLUSTER.md](docs/HOWTO_RECREATE_CLUSTER.md)
+  - Use this to run a clean, reproducible cluster recreate flow.
 - [ARGOCD_GITOPS_GUIDE.md](docs/ARGOCD_GITOPS_GUIDE.md)
   - Use this to move addon lifecycle ownership to Argo CD.
 - [SINGLE_NODE_GUIDE.md](docs/SINGLE_NODE_GUIDE.md)
