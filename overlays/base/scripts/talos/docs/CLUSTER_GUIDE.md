@@ -18,7 +18,92 @@ Use this guide together with:
 `cluster-spec.yaml` is the cluster intent source of truth (IPs, counts,
 endpoint, CNI strategy). This guide is the execution runbook.
 
+## Patch Generation Model
+
+During `cluster-bootstrap.sh`, patch files are rendered from overlay variables.
+
+- `bootstrap.patch.yaml` is generated from `TALOS_NAMESERVERS` and bootstrap DNS/hostDNS/time flags.
+- `talos-cp-<n>.patch.yaml` and `talos-worker-<n>.patch.yaml` are generated from:
+  - `TALOS_CONTROL_PLANE_IPS` / `TALOS_WORKER_IPS`
+  - `TALOS_NODE_INTERFACE`
+  - `TALOS_GATEWAY`
+  - `TALOS_NETMASK_PREFIX`
+
+Do not treat those generated files as long-term manual edit targets.
+Keep desired values in overlay vars and rerun the workflow.
+
+## Talos Lifecycle (Apply Before And After Bootstrap)
+
+Core Talos sequence:
+
+1. Generate configs
+2. Apply config to nodes
+3. Bootstrap one control-plane node (one-time operation)
+
+Talosctl action name before and after bootstrap:
+
+- The command is the same: `talosctl apply-config`.
+- What changes is the intent:
+  - pre-bootstrap: initial machine configuration convergence
+  - post-bootstrap: re-convergence after patch changes
+
+Important:
+
+- `apply-config` is not a one-time action.
+- It is used before bootstrap and can be used again after bootstrap whenever
+  configuration changes are required.
+- In other words, apply is a convergence action that may run multiple times.
+
+### Patch Phase Matrix
+
+Bootstrap-time patches (Day-1 apply before bootstrap):
+
+- `bootstrap.patch.yaml`
+- `cp-bootstrap.patch.yaml` (control-plane only)
+- `worker-bootstrap.patch.yaml` (worker only)
+- `talos-cp-<n>.patch.yaml`
+- `talos-worker-<n>.patch.yaml`
+- `cni.patch.yaml` (only when `TALOS_DISABLE_DEFAULT_CNI=true`)
+
+Post-bootstrap patches (runtime/final-state intent):
+
+- `cp.patch.yaml` (control-plane runtime settings)
+- `worker.patch.yaml` (worker runtime settings)
+
+Current behavior note:
+
+- The bootstrap patch chain is applied by current scripts.
+- Runtime patch application should be executed as a post-bootstrap apply step
+  when those files are used as final-state overrides.
+
 ## What Each Script Actually Does
+
+### `cluster.sh`
+
+Unified entrypoint that orchestrates existing module scripts with explicit
+actions:
+
+- `generate`
+- `provision`
+- `apply-config`
+- `bootstrap`
+- `apply-cluster-config`
+- `install-addons`
+- `sync-access`
+
+Recommended `cluster.sh` execution order:
+
+1. `generate`
+2. `provision`
+3. `apply-config`
+4. `bootstrap`
+5. `sync-access`
+6. `apply-cluster-config`
+7. `install-addons` (optional extras)
+
+It supports `--vars-file` so cluster generation/provisioning can target any
+path (for example `overlays/lab/...` or `overlays/prod/...`) without changing
+script internals.
 
 ### `phase-cluster-ready.sh`
 
@@ -63,8 +148,9 @@ such as create only workers.
 Execute in this order for reproducible runs:
 
 1. Phase 1: Cluster Ready
-2. Phase 2: Network Bring-up
-3. Phase 3: GitOps handoff (Argo CD as source of truth)
+2. Phase 1.5: Post-bootstrap baseline (`apply-cluster-config`)
+3. Phase 2: Network Bring-up (optional extras)
+4. Phase 3: GitOps handoff (Argo CD as source of truth)
 
 ## Phase 1: Cluster Ready
 
@@ -89,15 +175,46 @@ If Talos default CNI is disabled (`cni: none`), this is expected:
 
 This does not block moving to Phase 2.
 
-## Phase 2: Network Bring-up
+## Phase 1.5: Post-Bootstrap Baseline
 
-Run Cilium first:
+This phase installs the minimum required components after Talos bootstrap so the
+cluster becomes operational for workloads.
+
+Default:
+
+- `cilium` (required when `TALOS_DISABLE_DEFAULT_CNI=true`)
+
+Optional baseline extension:
+
+- `longhorn` (if storage must be baseline in your project)
+
+Command:
+
+```bash
+./overlays/base/scripts/talos/cluster.sh apply-cluster-config --env=lab
+```
+
+With explicit list:
+
+```bash
+./overlays/base/scripts/talos/cluster.sh apply-cluster-config --env=lab --addons='["cilium","longhorn"]'
+```
+
+Important:
+
+- `apply-config` and `apply-cluster-config` are different steps:
+  - `apply-config`: Talos machine config (`talosctl apply-config`)
+  - `apply-cluster-config`: post-bootstrap Kubernetes baseline addons
+
+## Phase 2: Network Bring-up (Optional Extras)
+
+If Cilium was not installed in Phase 1.5, install it first:
 
 ```bash
 ./overlays/base/scripts/talos/cilium.sh --env=lab
 ```
 
-Then Argo CD (if desired in Phase 2):
+Then install optional extras such as Argo CD:
 
 ```bash
 ./overlays/base/scripts/talos/argocd.sh --env=lab

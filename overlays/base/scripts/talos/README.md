@@ -16,6 +16,7 @@ documented in the guides linked below.
 
 | Script                                     | Purpose                                                  | Notes                                                                         |
 | ------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `cluster.sh`                               | Unified cluster lifecycle entrypoint                     | Actions: `generate`, `provision`, `apply-config`, `bootstrap`, `apply-cluster-config`, `install-addons`, `sync-access` |
 | `install.sh`                               | Install or upgrade `talosctl`                            | Local or remote execution                                                     |
 | `provision-single-node.sh`                 | Provision a non-HA Talos node                            | Thin wrapper over `overlays/base/scripts/talos/govc/provision-single-node.sh` |
 | `provision-cluster.sh`                     | Provision a Talos cluster topology                       | Thin wrapper over `overlays/base/scripts/talos/govc/provision-cluster.sh`     |
@@ -38,6 +39,7 @@ documented in the guides linked below.
 The Talos module is split into two layers:
 
 - Talos operations:
+  - `cluster.sh`
   - `install.sh`
   - `cluster-bootstrap.sh`
   - `phase-cluster-ready.sh`
@@ -62,6 +64,50 @@ The cluster provisioning implementation (`talos/govc/provision-cluster.sh`)
 also syncs owner-scoped DNS records (`owner=talos`) after create/destroy.
 At the end of `phase-cluster-ready.sh`, local access is synchronized automatically
 for `kubectl` and `talosctl` (disable with `--skip-sync-access`).
+
+## Unified Entry Point
+
+Use `cluster.sh` as the environment-agnostic orchestrator when you want one
+stable CLI contract:
+
+```bash
+./overlays/base/scripts/talos/cluster.sh <action> [options]
+```
+
+Supported actions:
+
+- `generate`
+- `provision`
+- `apply-config`
+- `bootstrap`
+- `apply-cluster-config`
+- `install-addons`
+- `sync-access`
+
+Recommended execution order:
+
+1. `generate`
+2. `provision`
+3. `apply-config`
+4. `bootstrap`
+5. `sync-access`
+6. `apply-cluster-config`
+7. `install-addons` (optional extras after baseline)
+
+Why `apply-cluster-config` exists:
+
+- `apply-config` is Talos machine configuration convergence (pre and post bootstrap).
+- `apply-cluster-config` is Kubernetes baseline convergence (post bootstrap), for required components such as CNI and storage.
+- This separation keeps strong cohesion:
+  - Talos lifecycle in `cluster-bootstrap.sh`
+  - Cluster baseline addons in `phase-network-bringup.sh` wrappers
+  - Optional day-2 addons as separate steps
+
+Important:
+
+- `cluster.sh` reuses existing scripts. It does not replace module internals.
+- You can pass `--vars-file=<path>` to target any overlay/project path without
+  hard-coding `lab` or `prod`.
 
 ## Required Tools
 

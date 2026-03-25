@@ -1,7 +1,0 @@
-machine:
-  time:
-    disabled: true
-  features:
-    hostDNS:
-      enabled: false
-      forwardKubeDNSToHost: false

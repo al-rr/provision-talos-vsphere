@@ -104,8 +104,11 @@ spec:
 
   addons:
     orchestration:
-      script: "overlays/base/scripts/talos/phase-network-bringup.sh"
-      mode: "one addon per execution via --addon=<name>"
+      baselineScript: "overlays/base/scripts/talos/apply-cluster-config.sh"
+      baselineAction: "overlays/base/scripts/talos/cluster.sh apply-cluster-config --env=lab"
+      baselineAddonsSource: "TALOS_CLUSTER_BASELINE_ADDONS (fallback TALOS_BASELINE_ADDONS)"
+      addonScript: "overlays/base/scripts/talos/phase-network-bringup.sh"
+      mode: "baseline list via --addons=..., or one addon via --addon=<name>"
     releases:
       cilium:
         releaseFile: "overlays/lab/talos/talos/helm/cilium/release.yaml"
@@ -143,9 +146,21 @@ spec:
 
   operations:
     bootstrapMode: "cluster-bootstrap.sh --mode=all"
+    recommendedActionOrder:
+      - "cluster.sh generate"
+      - "cluster.sh provision"
+      - "cluster.sh apply-config"
+      - "cluster.sh bootstrap"
+      - "cluster.sh sync-access"
+      - "cluster.sh apply-cluster-config"
+      - "cluster.sh install-addons (optional extras)"
     globalPatchesDefault: "disabled"
     globalPatchesEnableFlag: "--enable-global-patches"
     clusterPatchesDir: "overlays/lab/talos/talos/patches"
+    generatedFromVars:
+      bootstrapPatch: "bootstrap.patch.yaml (from TALOS_NAMESERVERS and bootstrap flags)"
+      controlPlaneNodePatches: "talos-cp-<n>.patch.yaml (from TALOS_CONTROL_PLANE_IPS/network vars)"
+      workerNodePatches: "talos-worker-<n>.patch.yaml (from TALOS_WORKER_IPS/network vars)"
 
   validation:
     checks:

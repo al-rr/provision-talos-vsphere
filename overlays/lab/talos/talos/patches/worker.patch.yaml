@@ -1,6 +1,6 @@
 machine:
   time:
-    disabled: false
+    disabled: true
   features:
     hostDNS:
       enabled: true
