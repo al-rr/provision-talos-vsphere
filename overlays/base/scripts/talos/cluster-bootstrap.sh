@@ -254,20 +254,11 @@ render_node_network_patches() {
   local iface="${TALOS_NODE_INTERFACE:-eth0}"
   local gateway="${TALOS_GATEWAY:-${NETWORK_GATEWAY:-}}"
   local netmask="${TALOS_NETMASK_PREFIX:-${NETWORK_NETMASK_PREFIX:-24}}"
-  local dns_raw="${TALOS_NAMESERVERS:-${NETWORK_NAMESERVERS:-}}"
-  local dns_csv=""
   local idx=1
   local ip=""
   local patch_file=""
-  local dns_ip=""
-  local -a dns_list=()
 
   mkdir -p "${cluster_patches_dir}"
-
-  dns_csv="$(normalize_csv_list "${dns_raw}")"
-  if [[ -n "${dns_csv}" ]]; then
-    mapfile -t dns_list < <(csv_to_array "${dns_csv}")
-  fi
 
   for ip in "${CP_IPS[@]}"; do
     patch_file="${cluster_patches_dir}/${cp_prefix}-${idx}.patch.yaml"
@@ -282,13 +273,6 @@ render_node_network_patches() {
       echo "          - network: 0.0.0.0/0"
       echo "            gateway: ${gateway}"
       echo "        dhcp: false"
-      if (( ${#dns_list[@]} > 0 )); then
-        echo "    nameservers:"
-        for dns_ip in "${dns_list[@]}"; do
-          [[ -n "${dns_ip}" ]] || continue
-          echo "      - ${dns_ip}"
-        done
-      fi
     } > "${patch_file}"
     idx=$((idx + 1))
   done
@@ -307,42 +291,70 @@ render_node_network_patches() {
       echo "          - network: 0.0.0.0/0"
       echo "            gateway: ${gateway}"
       echo "        dhcp: false"
-      if (( ${#dns_list[@]} > 0 )); then
-        echo "    nameservers:"
-        for dns_ip in "${dns_list[@]}"; do
-          [[ -n "${dns_ip}" ]] || continue
-          echo "      - ${dns_ip}"
-        done
-      fi
     } > "${patch_file}"
     idx=$((idx + 1))
   done
+}
+
+render_bootstrap_patch() {
+  local cluster_patches_dir="$1"
+  local bootstrap_patch_file="${cluster_patches_dir}/bootstrap.patch.yaml"
+  local dns_raw="${TALOS_NAMESERVERS:-${NETWORK_NAMESERVERS:-}}"
+  local dns_csv=""
+  local dns_ip=""
+  local -a dns_list=()
+  local time_disabled="${TALOS_BOOTSTRAP_TIME_DISABLED:-true}"
+  local hostdns_enabled="${TALOS_BOOTSTRAP_HOST_DNS_ENABLED:-false}"
+  local hostdns_forward="${TALOS_BOOTSTRAP_FORWARD_KUBE_DNS_TO_HOST:-false}"
+
+  mkdir -p "${cluster_patches_dir}"
+
+  dns_csv="$(normalize_csv_list "${dns_raw}")"
+  if [[ -n "${dns_csv}" ]]; then
+    mapfile -t dns_list < <(csv_to_array "${dns_csv}")
+  fi
+
+  {
+    echo "machine:"
+    echo "  time:"
+    echo "    disabled: ${time_disabled}"
+    echo "  features:"
+    echo "    hostDNS:"
+    echo "      enabled: ${hostdns_enabled}"
+    echo "      forwardKubeDNSToHost: ${hostdns_forward}"
+    if (( ${#dns_list[@]} > 0 )); then
+      echo "  network:"
+      echo "    nameservers:"
+      for dns_ip in "${dns_list[@]}"; do
+        [[ -n "${dns_ip}" ]] || continue
+        echo "      - ${dns_ip}"
+      done
+    fi
+  } > "${bootstrap_patch_file}"
 }
 
 build_generate_patch_args() {
   local kind="$1"
   local global_patches_dir="$2"
   local cluster_patches_dir="$3"
-  local common_alias=""
+  local role_bootstrap_patch=""
   local -a args=()
 
   if [[ "${kind}" == "control-plane" ]]; then
-    common_alias="cp-common.patch.yaml"
+    role_bootstrap_patch="cp-bootstrap.patch.yaml"
   else
-    common_alias="${kind}-common.patch.yaml"
+    role_bootstrap_patch="worker-bootstrap.patch.yaml"
   fi
 
   if [[ -n "${global_patches_dir}" && -d "${global_patches_dir}" ]]; then
     [[ -f "${global_patches_dir}/dns.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${global_patches_dir}/dns.patch.yaml")
     [[ -f "${global_patches_dir}/flannel.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${global_patches_dir}/flannel.patch.yaml")
-    [[ -f "${global_patches_dir}/${kind}-common.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${global_patches_dir}/${kind}-common.patch.yaml")
-    [[ -f "${global_patches_dir}/${common_alias}" ]] && args+=("--config-patch-${kind}" "@${global_patches_dir}/${common_alias}")
   fi
 
   [[ -n "${CNI_PATCH_FILE}" ]] && args+=("--config-patch-${kind}" "@${CNI_PATCH_FILE}")
+  [[ -f "${cluster_patches_dir}/bootstrap.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/bootstrap.patch.yaml")
+  [[ -f "${cluster_patches_dir}/${role_bootstrap_patch}" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/${role_bootstrap_patch}")
   [[ -f "${cluster_patches_dir}/dns.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/dns.patch.yaml")
-  [[ -f "${cluster_patches_dir}/${kind}-common.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/${kind}-common.patch.yaml")
-  [[ -f "${cluster_patches_dir}/${common_alias}" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/${common_alias}")
 
   printf '%s\n' "${args[@]}"
 }
@@ -355,31 +367,31 @@ patch_for_node() {
   local cluster_patches_dir="$5"
   local cp_prefix="${TALOS_CONTROL_PLANE_NAME_PREFIX:-talos-cp}"
   local worker_prefix="${TALOS_WORKER_NAME_PREFIX:-talos-worker}"
-  local common_alias=""
   local named_patch=""
+  local role_bootstrap_patch=""
   local current=""
   local tmp=""
   local patch=""
   local -a chain=()
 
+  if [[ "${kind}" == "controlplane" ]]; then
+    role_bootstrap_patch="cp-bootstrap.patch.yaml"
+  else
+    role_bootstrap_patch="worker-bootstrap.patch.yaml"
+  fi
+
   if [[ -n "${global_patches_dir}" && -d "${global_patches_dir}" ]]; then
+    [[ -f "${global_patches_dir}/bootstrap.patch.yaml" ]] && chain+=("${global_patches_dir}/bootstrap.patch.yaml")
+    [[ -f "${global_patches_dir}/${role_bootstrap_patch}" ]] && chain+=("${global_patches_dir}/${role_bootstrap_patch}")
     [[ -f "${global_patches_dir}/dns.patch.yaml" ]] && chain+=("${global_patches_dir}/dns.patch.yaml")
     [[ -f "${global_patches_dir}/flannel.patch.yaml" ]] && chain+=("${global_patches_dir}/flannel.patch.yaml")
-    [[ -f "${global_patches_dir}/${kind}-common.patch.yaml" ]] && chain+=("${global_patches_dir}/${kind}-common.patch.yaml")
-    if [[ "${kind}" == "controlplane" ]]; then
-      common_alias="cp-common.patch.yaml"
-      [[ -f "${global_patches_dir}/${common_alias}" ]] && chain+=("${global_patches_dir}/${common_alias}")
-    fi
     [[ -f "${global_patches_dir}/${kind}-${index}.patch.yaml" ]] && chain+=("${global_patches_dir}/${kind}-${index}.patch.yaml")
   fi
 
   [[ -n "${CNI_PATCH_FILE}" ]] && chain+=("${CNI_PATCH_FILE}")
+  [[ -f "${cluster_patches_dir}/bootstrap.patch.yaml" ]] && chain+=("${cluster_patches_dir}/bootstrap.patch.yaml")
+  [[ -f "${cluster_patches_dir}/${role_bootstrap_patch}" ]] && chain+=("${cluster_patches_dir}/${role_bootstrap_patch}")
   [[ -f "${cluster_patches_dir}/dns.patch.yaml" ]] && chain+=("${cluster_patches_dir}/dns.patch.yaml")
-  [[ -f "${cluster_patches_dir}/${kind}-common.patch.yaml" ]] && chain+=("${cluster_patches_dir}/${kind}-common.patch.yaml")
-  if [[ "${kind}" == "controlplane" ]]; then
-    common_alias="cp-common.patch.yaml"
-    [[ -f "${cluster_patches_dir}/${common_alias}" ]] && chain+=("${cluster_patches_dir}/${common_alias}")
-  fi
   [[ -f "${cluster_patches_dir}/${kind}-${index}.patch.yaml" ]] && chain+=("${cluster_patches_dir}/${kind}-${index}.patch.yaml")
   if [[ "${kind}" == "controlplane" ]]; then
     named_patch="${cluster_patches_dir}/${cp_prefix}-${index}.patch.yaml"
@@ -728,8 +740,9 @@ main() {
     fi
     [[ -n "${CNI_PATCH_FILE}" ]] || die "TALOS_DISABLE_DEFAULT_CNI=true but cni.patch.yaml was not found."
   fi
+  render_bootstrap_patch "${cluster_patches_dir}"
   render_node_network_patches "${cluster_patches_dir}"
-  log_info "Rendered per-node network patches from overlay vars in: ${cluster_patches_dir}"
+  log_info "Rendered bootstrap and per-node network patches from overlay vars in: ${cluster_patches_dir}"
   if [[ "${DISABLE_DEFAULT_CNI}" == "true" ]]; then
     log_info "Default Talos CNI/kube-proxy disable: enabled (${CNI_PATCH_FILE})"
   else

@@ -353,7 +353,7 @@ patched_config_file() {
   local index="$3"
   local current tmp patch_file
   local -a patch_chain=()
-  local cluster_dir role_prefix named_patch=""
+  local cluster_dir role_prefix role_bootstrap_patch named_patch=""
   local -a candidate_patch_dirs=()
   local patches_dir=""
 
@@ -361,9 +361,11 @@ patched_config_file() {
   if [[ "${role}" == "control-plane" ]]; then
     patch_chain+=("${CP_PATCH_FILES[@]}")
     role_prefix="controlplane"
+    role_bootstrap_patch="cp-bootstrap.patch.yaml"
   else
     patch_chain+=("${WORKER_PATCH_FILES[@]}")
     role_prefix="worker"
+    role_bootstrap_patch="worker-bootstrap.patch.yaml"
   fi
 
   cluster_dir="$(dirname "${CP_CONFIG_PATH}")"
@@ -372,10 +374,8 @@ patched_config_file() {
 
   for patches_dir in "${candidate_patch_dirs[@]}"; do
     [[ -d "${patches_dir}" ]] || continue
-    [[ -f "${patches_dir}/${role_prefix}-common.patch.yaml" ]] && patch_chain+=("${patches_dir}/${role_prefix}-common.patch.yaml")
-    if [[ "${role}" == "control-plane" ]]; then
-      [[ -f "${patches_dir}/cp-common.patch.yaml" ]] && patch_chain+=("${patches_dir}/cp-common.patch.yaml")
-    fi
+    [[ -f "${patches_dir}/bootstrap.patch.yaml" ]] && patch_chain+=("${patches_dir}/bootstrap.patch.yaml")
+    [[ -f "${patches_dir}/${role_bootstrap_patch}" ]] && patch_chain+=("${patches_dir}/${role_bootstrap_patch}")
     [[ -f "${patches_dir}/${role_prefix}-${index}.patch.yaml" ]] && patch_chain+=("${patches_dir}/${role_prefix}-${index}.patch.yaml")
     if [[ "${role}" == "control-plane" ]]; then
       named_patch="${patches_dir}/${CP_NAME_PREFIX}-${index}.patch.yaml"

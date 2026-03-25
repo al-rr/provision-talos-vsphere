@@ -24,8 +24,9 @@ export OVERLAY_ENV="lab"
 # Environment anchors (override values only).
 export NETWORK_GATEWAY="192.168.0.2"
 export NETWORK_NETMASK_PREFIX="24"
-export NETWORK_NAMESERVERS='["192.168.0.2"]'
+export NETWORK_NAMESERVERS='["1.1.1.1","8.8.8.8"]'
 export VM_STATIC_INTERFACE="ens160"
+export HAPROXY_VM_NAMESERVERS='["1.1.1.1","8.8.8.8"]'
 
 # Build/guest account in lab (used by Packer and GOVC in-guest steps).
 export BUILD_USERNAME="vagrant"
@@ -98,6 +99,6 @@ export TALOS_WORKER_NAME_PREFIX="talos-worker"
 export TALOS_NODE_INTERFACE="eth0"
 export TALOS_GATEWAY="${NETWORK_GATEWAY}"
 export TALOS_NETMASK_PREFIX="${NETWORK_NETMASK_PREFIX}"
-export TALOS_NAMESERVERS="${NETWORK_NAMESERVERS}"
+export TALOS_NAMESERVERS='["1.1.1.1","8.8.8.8"]'
 export TALOS_CONTROL_PLANE_CONFIG_PATH="overlays/lab/talos/${TALOS_CLUSTER_NAME}/generated/controlplane.yaml"
 export TALOS_WORKER_CONFIG_PATH="overlays/lab/talos/${TALOS_CLUSTER_NAME}/generated/worker.yaml"

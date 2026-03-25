@@ -236,9 +236,9 @@ main() {
 
   log_info "Phase 2/2: server-side dry-run validation (mandatory)"
   if [[ "${DRY_RUN}" == "true" ]]; then
-    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl apply --server-side --dry-run=server -f ${render_file}"
+    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl apply --server-side --force-conflicts --dry-run=server -f ${render_file}"
   else
-    KUBECONFIG="${kubeconfig_file}" kubectl apply --server-side --dry-run=server -f "${render_file}" >/dev/null
+    KUBECONFIG="${kubeconfig_file}" kubectl apply --server-side --force-conflicts --dry-run=server -f "${render_file}" >/dev/null
   fi
 
   if [[ "${RENDER_ONLY}" == "true" ]]; then

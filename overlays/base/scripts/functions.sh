@@ -170,27 +170,52 @@ load_overlay_vars() {
   local base_vars
   local env_vars
   local local_vars
+  local explicit_vars_file
+  local explicit_local_vars_file
 
   repo_root="$(overlay_repo_root)"
   base_vars="${repo_root}/overlays/base/scripts/vars.sh"
   env_vars="${repo_root}/overlays/${env_name}/scripts/vars.sh"
   local_vars="${repo_root}/overlays/${env_name}/scripts/vars.local.sh"
+  explicit_vars_file="${OVERLAY_VARS_FILE:-}"
+  explicit_local_vars_file="${OVERLAY_LOCAL_VARS_FILE:-}"
 
   require_file "${base_vars}"
   # shellcheck disable=SC1090
   source "${base_vars}"
 
-  if [[ -f "${env_vars}" ]]; then
+  if [[ -n "${explicit_vars_file}" ]]; then
+    if [[ "${explicit_vars_file}" != /* ]]; then
+      explicit_vars_file="${repo_root}/${explicit_vars_file}"
+    fi
+    require_file "${explicit_vars_file}"
+    log_info "Loading explicit overlay vars from ${explicit_vars_file}"
     # shellcheck disable=SC1090
-    source "${env_vars}"
+    source "${explicit_vars_file}"
   else
-    log_warn "No overlay vars file found for environment '${env_name}' at ${env_vars}"
+    if [[ -f "${env_vars}" ]]; then
+      # shellcheck disable=SC1090
+      source "${env_vars}"
+    else
+      log_warn "No overlay vars file found for environment '${env_name}' at ${env_vars}"
+    fi
   fi
 
-  if [[ -f "${local_vars}" ]]; then
-    log_info "Loading local overlay overrides from ${local_vars}"
-    # shellcheck disable=SC1090
-    source "${local_vars}"
+  if [[ -n "${explicit_local_vars_file}" ]]; then
+    if [[ "${explicit_local_vars_file}" != /* ]]; then
+      explicit_local_vars_file="${repo_root}/${explicit_local_vars_file}"
+    fi
+    if [[ -f "${explicit_local_vars_file}" ]]; then
+      log_info "Loading explicit local overlay overrides from ${explicit_local_vars_file}"
+      # shellcheck disable=SC1090
+      source "${explicit_local_vars_file}"
+    fi
+  else
+    if [[ -f "${local_vars}" ]]; then
+      log_info "Loading local overlay overrides from ${local_vars}"
+      # shellcheck disable=SC1090
+      source "${local_vars}"
+    fi
   fi
 
   load_legacy_env_file "${repo_root}"
