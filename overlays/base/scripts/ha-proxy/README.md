@@ -12,6 +12,20 @@ It provides:
 The lifecycle scripts (`install.sh`, `setup.sh`, `hardening.sh`) are compatibility
 wrappers and delegate execution to `infra-gitops/scripts/ha-proxy/`.
 
+## Why Hardening Is Required
+
+In this project, `hardening.sh` is required for stable HAProxy operation, not
+just optional security tuning.
+
+It applies:
+- firewall allow rules for HAProxy ports (`HAPROXY_ALLOWED_PORTS`)
+- sysctl network baseline (`rp_filter`, redirects/source-route, syncookies)
+- `net.ipv4.ip_nonlocal_bind=1` when `HAPROXY_ENABLE_NONLOCAL_BIND=true`
+
+The nonlocal bind setting is necessary for floating VIP scenarios. Without it,
+HAProxy can fail to start on a node that does not currently own the VIP, with
+errors like `cannot bind socket (Cannot assign requested address)`.
+
 ## Supported Platforms
 - Debian/Ubuntu (`apt`)
 - RHEL/Oracle Linux/Rocky/Alma (`dnf`/`yum`)
@@ -42,6 +56,7 @@ Important variables:
 - `HAPROXY_STATS_PASS="changeme"`
 - `HAPROXY_ALLOWED_PORTS="6443,8404"`
 - `HAPROXY_SYSCTL_PROFILE="secure"`
+- `HAPROXY_ENABLE_NONLOCAL_BIND="true"` (sets `net.ipv4.ip_nonlocal_bind=1`)
 - `HAPROXY_VM_TEMPLATE_NAME`, `HAPROXY_VM_OVA_PATH`, `HAPROXY_VM_OVF_PATH`
 - `HAPROXY_VM_NAMESERVERS` (defaults to `NETWORK_NAMESERVERS`, typically `192.168.0.53` in lab)
 
