@@ -40,6 +40,14 @@ Core Talos sequence:
 2. Apply config to nodes
 3. Bootstrap one control-plane node (one-time operation)
 
+ISO-specific pre-bootstrap behavior:
+
+- In ISO mode, nodes initially boot with DHCP addresses.
+- The provisioning step writes those temporary addresses to:
+  - `generated/bootstrap-ips.txt`
+- The apply phase automatically prefers that inventory for `talosctl apply-config`.
+- After apply, nodes converge to the static addresses from `TALOS_CONTROL_PLANE_IPS` and `TALOS_WORKER_IPS`.
+
 Talosctl action name before and after bootstrap:
 
 - The command is the same: `talosctl apply-config`.
@@ -258,6 +266,26 @@ Practical recommendation:
 
 - Use OVA for current lab flow (faster/consistent with this repo)
 - Use ISO when you explicitly need ISO lifecycle behavior
+
+## Control-Plane And Worker Images
+
+This project intentionally supports different Talos installer images per role:
+
+- `TALOS_CONTROL_PLANE_INSTALLER_IMAGE`
+- `TALOS_WORKER_INSTALLER_IMAGE`
+
+Why:
+
+- Control-plane nodes prioritize cluster control-plane/etcd stability.
+- Worker nodes may need storage/workload-specific evolution (for example
+  Longhorn now and vSphere CSI later).
+- Keeping image selection per role avoids coupling worker storage concerns to
+  control-plane nodes.
+
+Compatibility:
+
+- If role-specific values are not set, automation falls back to
+  `TALOS_INSTALLER_IMAGE`.
 
 ## How To Create Only Workers
 

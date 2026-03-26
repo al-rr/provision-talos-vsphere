@@ -48,7 +48,13 @@
   than operator entrypoints.
 - Wrapper entrypoints should accept `--env` (default `lab`) and resolve
   `overlays/<env>/scripts/vars.sh` automatically when `--vars-file` is not
-  explicitly provided.
+  explicitly provided, unless the module has already migrated to a
+  project-dir-first contract.
+- For Talos cluster lifecycle orchestration (`overlays/base/scripts/talos/cluster.sh`):
+  - `--project-dir` is the primary contract.
+  - `--env` is removed from this entrypoint.
+  - `--vars-file` remains available for advanced/manual use.
+  - `create-project` is the scaffold action that creates missing project files.
 - Pure compatibility wrappers that only `exec` an external script may delegate
   this behavior to that external implementation.
 - `overlays/prod/scripts/vars.sh` is the default production override file.
@@ -108,3 +114,24 @@
 - Applies to the entire repository.
 - Priority folders: `overlays/base/`, `overlays/lab/`, `overlays/prod/`,
   `docs/`, and root docs.
+
+## Bash Conventions (Project)
+
+- Keep shell scripts simple and explicit; avoid abstraction without repeated
+  concrete use-cases.
+- Prefer idempotent create/update operations:
+  - create missing files
+  - do not overwrite existing user files unless explicitly requested.
+- Separate responsibilities:
+  - scaffold/create phase creates project structure and templates
+  - generate phase creates generated artifacts and dynamic render outputs
+  - apply/bootstrap phases execute lifecycle actions.
+- Always fail fast with actionable errors:
+  - include what is missing
+  - include which flag/path should be provided.
+- Resolve real script path when symlinks are supported:
+  - use `readlink -f` before deriving repository-relative paths.
+- Keep defaults in one place (`overlays/base/scripts/vars.sh`) and let project
+  or environment vars override them explicitly.
+- Prefer deterministic file paths derived from project context instead of
+  hardcoded environment paths.

@@ -79,6 +79,7 @@ Supported actions:
 - `create-project`
 - `generate`
 - `provision`
+- `prepare-bootstrap`
 - `apply-config`
 - `bootstrap`
 - `apply-cluster-config`
@@ -90,11 +91,27 @@ Recommended execution order:
 0. `create-project`
 1. `generate`
 2. `provision`
-3. `apply-config`
+3. `prepare-bootstrap`
 4. `bootstrap`
 5. `sync-access`
 6. `apply-cluster-config`
 7. `install-addons` (optional extras after baseline)
+
+ISO mode note:
+
+- ISO boot starts with DHCP addresses.
+- `provision` captures bootstrap addresses in `generated/bootstrap-ips.txt`.
+- `prepare-bootstrap` automatically discovers and consumes that inventory before nodes switch to static IPs.
+
+Installer image strategy (control-plane vs worker):
+
+- `TALOS_CONTROL_PLANE_INSTALLER_IMAGE` is for control-plane nodes.
+- `TALOS_WORKER_INSTALLER_IMAGE` is for worker nodes.
+- This repository keeps them separated by design, so worker nodes can carry
+  workload/storage-specific requirements (for example Longhorn/CSI evolution)
+  without coupling those choices to control-plane/etcd nodes.
+- If one value is not explicitly set, scripts fall back to `TALOS_INSTALLER_IMAGE`
+  for compatibility.
 
 Why `apply-cluster-config` exists:
 
@@ -111,6 +128,30 @@ Important:
 - Preferred mode is `--project-dir=<path>`.
 - `--vars-file=<path>` remains available for advanced/manual flows.
 - `--env` is removed from `cluster.sh`; use `--project-dir` instead.
+
+## Optional Global Command
+
+If you want to run the cluster CLI from any directory, create a symlink in
+`/usr/local/bin`.
+
+Create/update symlink:
+
+```bash
+sudo ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster.sh /usr/local/bin/talos-cluster
+sudo chmod +x /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster.sh
+```
+
+Validate:
+
+```bash
+talos-cluster --help
+```
+
+Remove symlink:
+
+```bash
+sudo rm -f /usr/local/bin/talos-cluster
+```
 
 ## Required Tools
 
