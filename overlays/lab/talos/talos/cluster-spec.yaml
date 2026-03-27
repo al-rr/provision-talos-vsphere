@@ -104,11 +104,11 @@ spec:
 
   addons:
     orchestration:
-      baselineScript: "overlays/base/scripts/talos/apply-cluster-config.sh"
-      baselineAction: "overlays/base/scripts/talos/cluster.sh apply-cluster-config --env=lab"
-      baselineAddonsSource: "TALOS_CLUSTER_BASELINE_ADDONS (fallback TALOS_BASELINE_ADDONS)"
-      addonScript: "overlays/base/scripts/talos/phase-network-bringup.sh"
-      mode: "baseline list via --addons=..., or one addon via --addon=<name>"
+      baselineScript: "overlays/base/scripts/talos/apply-post-bootstrap.sh"
+      baselineAction: "overlays/base/scripts/talos/cluster.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos"
+      baselineAddonsSource: "TALOS_CLUSTER_BASELINE_ADDONS"
+      day2Script: "overlays/base/scripts/talos/talos-gitops.sh"
+      mode: "baseline list via --addons=... (day-1), optional extras via talos-gitops.sh (day-2)"
     releases:
       cilium:
         releaseFile: "overlays/lab/talos/talos/helm/cilium/release.yaml"
@@ -149,13 +149,13 @@ spec:
     recommendedActionOrder:
       - "cluster.sh generate"
       - "cluster.sh provision"
+      - "cluster.sh prepare-bootstrap"
       - "cluster.sh apply-config"
       - "cluster.sh bootstrap"
       - "cluster.sh sync-access"
-      - "cluster.sh apply-cluster-config"
-      - "cluster.sh install-addons (optional extras)"
-    globalPatchesDefault: "disabled"
-    globalPatchesEnableFlag: "--enable-global-patches"
+      - "cluster.sh apply-post-bootstrap"
+      - "talos-gitops.sh install-platform-helm (optional extras)"
+      - "talos-gitops.sh deploy-argocd-root-app (optional day-2 gitops)"
     clusterPatchesDir: "overlays/lab/talos/talos/patches"
     generatedFromVars:
       bootstrapPatch: "bootstrap.patch.yaml (from TALOS_NAMESERVERS and bootstrap flags)"

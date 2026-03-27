@@ -12,8 +12,6 @@ module, even if the implementation uses `govc`.
 
 - `provision-cluster.sh`: VMware provisioning entrypoint for Talos clusters
 - `provision-single-node.sh`: VMware provisioning entrypoint for non-HA Talos
-- `provision-single.sh`: compatibility alias for the single-node entrypoint
-- `vmware.sh`: legacy compatibility wrapper for Talos VMware flows
 
 ## Notes
 
