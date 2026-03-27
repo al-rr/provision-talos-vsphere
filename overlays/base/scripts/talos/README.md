@@ -136,6 +136,8 @@ Why `apply-post-bootstrap` exists:
   This protects the day-1 CNI baseline from accidental broad reapply; use
   `--addons` and `--exclude-addons` to control exactly what should run.
   System exclusions are always enforced and merged with user exclusions.
+- In day-2, `talos-gitops.sh` requires `--kube-context=<name>` to ensure
+  commands run against the intended cluster context.
 
 Important:
 

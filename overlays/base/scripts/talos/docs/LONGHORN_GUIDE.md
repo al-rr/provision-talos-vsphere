@@ -40,6 +40,7 @@ Day-2 GitOps mode (from manifest source):
 
 ```bash
 ./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+  --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["longhorn"]'
 ```
@@ -50,7 +51,7 @@ Day-2 GitOps mode (from manifest source):
   - `overlays/lab/talos/talos/helm/longhorn/values.yaml`
 - Re-run one of:
   - `cluster.sh apply-post-bootstrap --addons='["longhorn"]'`
-  - `talos-gitops.sh install-platform-helm --addons='["longhorn"]'`
+  - `talos-gitops.sh install-platform-helm --kube-context=<context> --addons='["longhorn"]'`
 - Helm performs an in-place upgrade of the release.
 
 ## Validation Commands

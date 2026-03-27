@@ -28,6 +28,7 @@ Install Argo CD first from the GitOps manifest source:
 
 ```bash
 ./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+  --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["argocd"]'
 ```
@@ -47,21 +48,26 @@ Default behavior:
 - System excludes are always enforced and merged with user excludes.
 - In practice, this means `install-platform-helm` is for day-2/platform addons,
   while Cilium lifecycle stays in day-1 flow.
+- `--kube-context` is required to reduce risk of applying to the wrong cluster
+  when multiple contexts exist in kubeconfig.
 
 Examples:
 
 ```bash
 # Scenario 1: install broad platform set (system excludes still applied)
 ./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+  --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
 
 # Scenario 2: install only what you choose
 ./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+  --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["longhorn"]'
 
 # Scenario 2b: still selective, but skip extra addons for this run
 ./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+  --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["argocd","longhorn","cert-manager"]' \
   --exclude-addons='["longhorn"]'

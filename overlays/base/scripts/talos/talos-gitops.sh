@@ -16,6 +16,7 @@ ADDONS_RAW=""
 EXCLUDE_ADDONS_RAW=""
 SYSTEM_EXCLUDE_ADDONS_RAW="cilium"
 KUBECONFIG_PATH=""
+KUBE_CONTEXT=""
 CILIUM_ROLLOUT_TIMEOUT="300s"
 DRY_RUN="false"
 
@@ -35,16 +36,17 @@ Options:
   --addons=<list>                CSV/JSON-like addon list override (example: ["cilium","longhorn"])
   --exclude-addons=<list>        CSV/JSON-like addons to skip in install-platform-helm (merged with system excludes)
   --kubeconfig=<path>            Kubeconfig path override (default: KUBECONFIG or ~/.kube/config)
+  --kube-context=<name>          Kubernetes context to execute against (required)
   --cilium-rollout-timeout=<dur> Timeout for Cilium rollout wait when cilium CLI is unavailable (default: 300s)
   -n, --dry-run                  Print actions without executing
   -h, --help                     Show help
 
 Examples:
-  $(basename "$0") install-platform-helm --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
-  $(basename "$0") install-platform-helm --helm-manifest-dir=/home/vagrant/talos-vsphere-gitops/environments/lab/helm --addons='["longhorn"]'
-  $(basename "$0") install-platform-helm --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab --exclude-addons='["longhorn"]'
-  $(basename "$0") deploy-argocd-root-app --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
-  $(basename "$0") configure-talos-cluster-tools --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+  $(basename "$0") install-platform-helm --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+  $(basename "$0") install-platform-helm --kube-context=admin@talos-dev --helm-manifest-dir=/home/vagrant/talos-vsphere-gitops/environments/lab/helm --addons='["longhorn"]'
+  $(basename "$0") install-platform-helm --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab --exclude-addons='["longhorn"]'
+  $(basename "$0") deploy-argocd-root-app --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+  $(basename "$0") configure-talos-cluster-tools --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
 EOF_USAGE
 }
 
@@ -62,6 +64,7 @@ parse_args() {
       --addons=*) ADDONS_RAW="${1#*=}"; shift ;;
       --exclude-addons=*) EXCLUDE_ADDONS_RAW="${1#*=}"; shift ;;
       --kubeconfig=*) KUBECONFIG_PATH="${1#*=}"; shift ;;
+      --kube-context=*) KUBE_CONTEXT="${1#*=}"; shift ;;
       --cilium-rollout-timeout=*) CILIUM_ROLLOUT_TIMEOUT="${1#*=}"; shift ;;
       -n|--dry-run) DRY_RUN="true"; shift ;;
       -h|--help) usage; exit 0 ;;
@@ -70,6 +73,7 @@ parse_args() {
   done
 
   [[ -n "${ACTION}" ]] || { usage; die "Action is required."; }
+  [[ -n "${KUBE_CONTEXT}" ]] || die "--kube-context is required."
 }
 
 resolve_path() {
@@ -179,12 +183,12 @@ ensure_namespace() {
   [[ -n "${namespace}" ]] || return 0
 
   if [[ "${DRY_RUN}" == "true" ]]; then
-    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl get namespace ${namespace} || kubectl create namespace ${namespace}"
+    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl --context=${KUBE_CONTEXT} get namespace ${namespace} || kubectl --context=${KUBE_CONTEXT} create namespace ${namespace}"
     return 0
   fi
 
-  KUBECONFIG="${kubeconfig_file}" kubectl get namespace "${namespace}" >/dev/null 2>&1 || \
-    KUBECONFIG="${kubeconfig_file}" kubectl create namespace "${namespace}" >/dev/null
+  KUBECONFIG="${kubeconfig_file}" kubectl --context="${KUBE_CONTEXT}" get namespace "${namespace}" >/dev/null 2>&1 || \
+    KUBECONFIG="${kubeconfig_file}" kubectl --context="${KUBE_CONTEXT}" create namespace "${namespace}" >/dev/null
 }
 
 label_namespace_security() {
@@ -199,7 +203,7 @@ label_namespace_security() {
     return 0
   fi
 
-  local -a cmd=(kubectl label namespace "${namespace}" --overwrite)
+  local -a cmd=(kubectl --context="${KUBE_CONTEXT}" label namespace "${namespace}" --overwrite)
   [[ -n "${enforce_level}" ]] && cmd+=("pod-security.kubernetes.io/enforce=${enforce_level}")
   [[ -n "${audit_level}" ]] && cmd+=("pod-security.kubernetes.io/audit=${audit_level}")
   [[ -n "${warn_level}" ]] && cmd+=("pod-security.kubernetes.io/warn=${warn_level}")
@@ -340,16 +344,17 @@ install_single_addon() {
 
   log_info "[${addon}] Phase 2/2: server-side dry-run validation"
   if [[ "${DRY_RUN}" == "true" ]]; then
-    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl apply --server-side --force-conflicts --dry-run=server -f ${render_file}"
+    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl --context=${KUBE_CONTEXT} apply --server-side --force-conflicts --dry-run=server -f ${render_file}"
   else
-    KUBECONFIG="${kubeconfig_file}" kubectl apply --server-side --force-conflicts --dry-run=server -f "${render_file}" >/dev/null
+    KUBECONFIG="${kubeconfig_file}" kubectl --context="${KUBE_CONTEXT}" apply --server-side --force-conflicts --dry-run=server -f "${render_file}" >/dev/null
   fi
 
   log_info "[${addon}] Phase 2/3: helm upgrade --install"
   if [[ "${DRY_RUN}" == "true" ]]; then
-    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} helm upgrade --install ${release_name} ${chart} --version ${version} --namespace ${namespace} --create-namespace -f ${values_file}"
+    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} helm upgrade --install ${release_name} ${chart} --kube-context ${KUBE_CONTEXT} --version ${version} --namespace ${namespace} --create-namespace -f ${values_file}"
   else
     KUBECONFIG="${kubeconfig_file}" helm upgrade --install "${release_name}" "${chart}" \
+      --kube-context "${KUBE_CONTEXT}" \
       --version "${version}" \
       --namespace "${namespace}" \
       --create-namespace \
@@ -359,25 +364,25 @@ install_single_addon() {
   log_info "[${addon}] Phase 2/4: post-install validations"
   if [[ "${DRY_RUN}" == "true" ]]; then
     if [[ -n "${validation_selector}" ]]; then
-      log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl -n ${namespace} get pods -l ${validation_selector}"
+      log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl --context=${KUBE_CONTEXT} -n ${namespace} get pods -l ${validation_selector}"
     else
-      log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl -n ${namespace} get pods"
+      log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl --context=${KUBE_CONTEXT} -n ${namespace} get pods"
     fi
-    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl get nodes"
+    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl --context=${KUBE_CONTEXT} get nodes"
   else
     if [[ -n "${validation_selector}" ]]; then
-      KUBECONFIG="${kubeconfig_file}" kubectl -n "${namespace}" get pods -l "${validation_selector}"
+      KUBECONFIG="${kubeconfig_file}" kubectl --context="${KUBE_CONTEXT}" -n "${namespace}" get pods -l "${validation_selector}"
     else
-      KUBECONFIG="${kubeconfig_file}" kubectl -n "${namespace}" get pods
+      KUBECONFIG="${kubeconfig_file}" kubectl --context="${KUBE_CONTEXT}" -n "${namespace}" get pods
     fi
-    KUBECONFIG="${kubeconfig_file}" kubectl get nodes
+    KUBECONFIG="${kubeconfig_file}" kubectl --context="${KUBE_CONTEXT}" get nodes
 
     if [[ "${addon}" == "cilium" ]]; then
       if command -v cilium >/dev/null 2>&1; then
-        KUBECONFIG="${kubeconfig_file}" cilium status --wait
+        KUBECONFIG="${kubeconfig_file}" cilium status --context "${KUBE_CONTEXT}" --wait
       else
         log_warn "cilium CLI not found; waiting daemonset/cilium rollout via kubectl (${CILIUM_ROLLOUT_TIMEOUT})"
-        if ! KUBECONFIG="${kubeconfig_file}" kubectl -n "${namespace}" rollout status daemonset/cilium --timeout="${CILIUM_ROLLOUT_TIMEOUT}"; then
+        if ! KUBECONFIG="${kubeconfig_file}" kubectl --context="${KUBE_CONTEXT}" -n "${namespace}" rollout status daemonset/cilium --timeout="${CILIUM_ROLLOUT_TIMEOUT}"; then
           log_warn "Cilium rollout timed out; continue monitoring manually."
         fi
       fi
@@ -386,11 +391,11 @@ install_single_addon() {
 
   log_info "[${addon}] Follow-up monitoring:"
   if [[ -n "${validation_selector}" ]]; then
-    log_info "  KUBECONFIG=${kubeconfig_file} kubectl -n ${namespace} get pods -l ${validation_selector} -w"
+    log_info "  KUBECONFIG=${kubeconfig_file} kubectl --context=${KUBE_CONTEXT} -n ${namespace} get pods -l ${validation_selector} -w"
   else
-    log_info "  KUBECONFIG=${kubeconfig_file} kubectl -n ${namespace} get pods -w"
+    log_info "  KUBECONFIG=${kubeconfig_file} kubectl --context=${KUBE_CONTEXT} -n ${namespace} get pods -w"
   fi
-  log_info "  KUBECONFIG=${kubeconfig_file} kubectl get nodes -w"
+  log_info "  KUBECONFIG=${kubeconfig_file} kubectl --context=${KUBE_CONTEXT} get nodes -w"
 }
 
 install_platform_helm() {
@@ -424,11 +429,11 @@ deploy_argocd_root_app() {
   require_file "${root_app_file}"
 
   if [[ "${DRY_RUN}" == "true" ]]; then
-    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl apply -f ${root_app_file}"
+    log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl --context=${KUBE_CONTEXT} apply -f ${root_app_file}"
     return 0
   fi
 
-  KUBECONFIG="${kubeconfig_file}" kubectl apply -f "${root_app_file}"
+  KUBECONFIG="${kubeconfig_file}" kubectl --context="${KUBE_CONTEXT}" apply -f "${root_app_file}"
 }
 
 main() {
@@ -460,6 +465,9 @@ main() {
   else
     kubeconfig_file="${HOME}/.kube/config"
   fi
+  [[ -f "${kubeconfig_file}" ]] || die "kubeconfig not found: ${kubeconfig_file}"
+  KUBECONFIG="${kubeconfig_file}" kubectl config get-contexts "${KUBE_CONTEXT}" >/dev/null 2>&1 || \
+    die "kube-context not found in kubeconfig: ${KUBE_CONTEXT}"
 
   case "${ACTION}" in
     install-platform-helm)
