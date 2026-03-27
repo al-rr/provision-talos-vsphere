@@ -249,6 +249,10 @@ After network is stable:
 2. Apply root app / app-of-apps
 3. Move day-2 addon changes to Git-only workflow (PR/merge)
 
+Tip:
+
+- If you configured global symlinks, use `talos-gitops` directly (same pattern as `talos-cluster`).
+
 ## OVA vs ISO: How To Choose
 
 Provisioning supports both modes.

@@ -142,26 +142,39 @@ Important:
 
 ## Optional Global Command
 
-If you want to run the cluster CLI from any directory, create a symlink in
+If you want to run the CLIs from any directory, create symlinks in
 `/usr/local/bin`.
 
 Create/update symlink:
 
 ```bash
 sudo ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster.sh /usr/local/bin/talos-cluster
+sudo ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops.sh /usr/local/bin/talos-gitops
 sudo chmod +x /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster.sh
+sudo chmod +x /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops.sh
 ```
 
 Validate:
 
 ```bash
 talos-cluster --help
+talos-gitops --help
 ```
 
 Remove symlink:
 
 ```bash
 sudo rm -f /usr/local/bin/talos-cluster
+sudo rm -f /usr/local/bin/talos-gitops
+```
+
+Without `sudo` (user-local path):
+
+```bash
+mkdir -p ~/.local/bin
+ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster.sh ~/.local/bin/talos-cluster
+ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops.sh ~/.local/bin/talos-gitops
+# ensure ~/.local/bin is in PATH
 ```
 
 ## Required Tools
