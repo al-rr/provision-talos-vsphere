@@ -81,6 +81,9 @@ main() {
   local target_cfg=""
   local target_dir=""
   local endpoint=""
+  local talosctl_endpoints_raw=""
+  local talosctl_endpoints_csv=""
+  local -a talosctl_endpoints=()
   local cp_ips_raw=""
   local -a cp_ips=()
 
@@ -95,10 +98,13 @@ main() {
 
   target_cfg="${TARGET_TALOSCONFIG}"
   target_dir="$(dirname "${target_cfg}")"
-  endpoint="${TALOS_CLUSTER_ENDPOINT:-}"
-  endpoint="${endpoint#http://}"
-  endpoint="${endpoint#https://}"
-  endpoint="${endpoint%%/*}"
+  # Talos API endpoints must target Talos API (default 50000), not Kubernetes API (6443).
+  # Allow explicit override, otherwise default to control-plane IP list.
+  talosctl_endpoints_raw="${TALOS_TALOSCTL_ENDPOINTS:-}"
+  talosctl_endpoints_csv="$(normalize_csv_list "${talosctl_endpoints_raw}")"
+  if [[ -n "${talosctl_endpoints_csv}" ]]; then
+    mapfile -t talosctl_endpoints < <(csv_to_array "${talosctl_endpoints_csv}")
+  fi
 
   cp_ips_raw="$(normalize_csv_list "${TALOS_CONTROL_PLANE_IPS:-}")"
   mapfile -t cp_ips < <(csv_to_array "${cp_ips_raw}")
@@ -112,12 +118,14 @@ main() {
     chmod 600 "${target_cfg}"
   fi
 
-  if [[ -n "${endpoint}" ]]; then
-    if [[ "${DRY_RUN}" == "true" ]]; then
-      log_info "[DRY-RUN] talosctl --talosconfig ${target_cfg} config endpoint ${endpoint}"
-    else
-      talosctl --talosconfig "${target_cfg}" config endpoint "${endpoint}" >/dev/null
-    fi
+  if (( ${#talosctl_endpoints[@]} == 0 )); then
+    talosctl_endpoints=("${cp_ips[@]}")
+  fi
+
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log_info "[DRY-RUN] talosctl --talosconfig ${target_cfg} config endpoint ${talosctl_endpoints[*]}"
+  else
+    talosctl --talosconfig "${target_cfg}" config endpoint "${talosctl_endpoints[@]}" >/dev/null
   fi
 
   if [[ "${DRY_RUN}" == "true" ]]; then

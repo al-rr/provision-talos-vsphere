@@ -418,11 +418,15 @@ build_controlplane_vip_patch_file() {
   local vip_enabled="${TALOS_CONTROL_PLANE_VIP_ENABLED:-true}"
   local vip_ip="${TALOS_CONTROL_PLANE_VIP:-${HAPROXY_VIP:-}}"
   local iface="${TALOS_NODE_INTERFACE:-eth0}"
+  local lb_vip="${HAPROXY_VIP:-}"
   local patch_file=""
 
   vip_enabled="$(normalize_bool "${vip_enabled}")"
   [[ "${vip_enabled}" == "true" ]] || return 0
   [[ -n "${vip_ip}" ]] || return 0
+  if [[ -n "${lb_vip}" && "${vip_ip}" == "${lb_vip}" ]]; then
+    die "Control-plane VIP (${vip_ip}) matches HAPROXY_VIP (${lb_vip}). Use distinct IPs, or set TALOS_CONTROL_PLANE_VIP_ENABLED=false when using external LB."
+  fi
 
   patch_file="$(mktemp)"
   cat > "${patch_file}" <<EOF_PATCH
@@ -552,12 +556,15 @@ build_generate_patch_args() {
   local global_patches_dir="$2"
   local cluster_patches_dir="$3"
   local role_bootstrap_patch=""
+  local role_common_patch=""
   local -a args=()
 
   if [[ "${kind}" == "control-plane" ]]; then
     role_bootstrap_patch="cp-bootstrap.patch.yaml"
+    role_common_patch="cp.patch.yaml"
   else
     role_bootstrap_patch="worker-bootstrap.patch.yaml"
+    role_common_patch="worker.patch.yaml"
   fi
 
   if [[ -n "${global_patches_dir}" && -d "${global_patches_dir}" ]]; then
@@ -567,7 +574,11 @@ build_generate_patch_args() {
 
   [[ -n "${CNI_PATCH_FILE}" ]] && args+=("--config-patch-${kind}" "@${CNI_PATCH_FILE}")
   [[ -f "${cluster_patches_dir}/bootstrap.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/bootstrap.patch.yaml")
+  [[ -f "${cluster_patches_dir}/${role_common_patch}" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/${role_common_patch}")
   [[ -s "${cluster_patches_dir}/${role_bootstrap_patch}" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/${role_bootstrap_patch}")
+  if [[ "${kind}" == "worker" ]]; then
+    [[ -f "${cluster_patches_dir}/longhorn.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/longhorn.patch.yaml")
+  fi
   [[ -f "${cluster_patches_dir}/dns.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/dns.patch.yaml")
 
   printf '%s\n' "${args[@]}"
@@ -583,6 +594,7 @@ patch_for_node() {
   local worker_prefix="${TALOS_WORKER_NAME_PREFIX:-talos-worker}"
   local named_patch=""
   local role_bootstrap_patch=""
+  local role_common_patch=""
   local current=""
   local tmp=""
   local patch=""
@@ -590,8 +602,10 @@ patch_for_node() {
 
   if [[ "${kind}" == "controlplane" ]]; then
     role_bootstrap_patch="cp-bootstrap.patch.yaml"
+    role_common_patch="cp.patch.yaml"
   else
     role_bootstrap_patch="worker-bootstrap.patch.yaml"
+    role_common_patch="worker.patch.yaml"
   fi
 
   if [[ -n "${global_patches_dir}" && -d "${global_patches_dir}" ]]; then
@@ -604,7 +618,11 @@ patch_for_node() {
 
   [[ -n "${CNI_PATCH_FILE}" ]] && chain+=("${CNI_PATCH_FILE}")
   [[ -f "${cluster_patches_dir}/bootstrap.patch.yaml" ]] && chain+=("${cluster_patches_dir}/bootstrap.patch.yaml")
+  [[ -f "${cluster_patches_dir}/${role_common_patch}" ]] && chain+=("${cluster_patches_dir}/${role_common_patch}")
   [[ -s "${cluster_patches_dir}/${role_bootstrap_patch}" ]] && chain+=("${cluster_patches_dir}/${role_bootstrap_patch}")
+  if [[ "${kind}" == "worker" ]]; then
+    [[ -f "${cluster_patches_dir}/longhorn.patch.yaml" ]] && chain+=("${cluster_patches_dir}/longhorn.patch.yaml")
+  fi
   [[ -f "${cluster_patches_dir}/dns.patch.yaml" ]] && chain+=("${cluster_patches_dir}/dns.patch.yaml")
   [[ -f "${cluster_patches_dir}/${kind}-${index}.patch.yaml" ]] && chain+=("${cluster_patches_dir}/${kind}-${index}.patch.yaml")
   if [[ "${kind}" == "controlplane" ]]; then
@@ -729,6 +747,7 @@ run_apply() {
   local ip=""
   local cfg=""
   local talosconfig_path="${GENERATED_DIR}/talosconfig"
+  local effective_apply_stage="${APPLY_STAGE}"
 
   if [[ "${DRY_RUN}" != "true" ]]; then
     [[ -f "${cp_base}" ]] || die "Missing generated controlplane config: ${cp_base}. Run --mode=generate first."
@@ -737,16 +756,30 @@ run_apply() {
 
   log_info "Apply stage: ${APPLY_STAGE}"
   load_apply_target_ips
+  if [[ "${effective_apply_stage}" == "auto" ]]; then
+    # In cluster.sh flow:
+    # - prepare-bootstrap forces --apply-stage=pre
+    # - apply-config uses auto and is typically post-bootstrap convergence
+    effective_apply_stage="post"
+  fi
 
   idx=1
   for ip in "${APPLY_CP_IPS[@]}"; do
     cfg="$(patch_for_node "${cp_base}" "controlplane" "${idx}" "${global_patches_dir}" "${cluster_patches_dir}")"
     log_info "Applying control-plane config to ${ip}"
     if [[ "${DRY_RUN}" == "true" ]]; then
-      run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+      if [[ "${effective_apply_stage}" == "pre" ]]; then
+        run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+      else
+        run_or_echo talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+      fi
     else
-      if ! talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"; then
-        log_warn "Insecure apply failed for ${ip}, retrying with talosconfig."
+      if [[ "${effective_apply_stage}" == "pre" ]]; then
+        if ! talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"; then
+          log_info "Insecure apply failed for ${ip}; retrying with talosconfig (expected when TLS is already required)."
+          talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+        fi
+      else
         talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
       fi
     fi
@@ -764,10 +797,18 @@ run_apply() {
     cfg="$(patch_for_node "${worker_base}" "worker" "${idx}" "${global_patches_dir}" "${cluster_patches_dir}")"
     log_info "Applying worker config to ${ip}"
     if [[ "${DRY_RUN}" == "true" ]]; then
-      run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+      if [[ "${effective_apply_stage}" == "pre" ]]; then
+        run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+      else
+        run_or_echo talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+      fi
     else
-      if ! talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"; then
-        log_warn "Insecure apply failed for ${ip}, retrying with talosconfig."
+      if [[ "${effective_apply_stage}" == "pre" ]]; then
+        if ! talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"; then
+          log_info "Insecure apply failed for ${ip}; retrying with talosconfig (expected when TLS is already required)."
+          talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+        fi
+      else
         talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
       fi
     fi
