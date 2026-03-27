@@ -122,8 +122,9 @@ load_context() {
 
 resolve_defaults() {
   if [[ -z "${SSH_USER}" ]]; then
-    SSH_USER="${HAPROXY_SSH_USER:-${ANSIBLE_USER:-${BUILD_USERNAME:-root}}}"
+    SSH_USER="${HAPROXY_SSH_USER:-}"
   fi
+  [[ -n "${SSH_USER}" ]] || die "SSH user not resolved. Set SSH_USER/HAPROXY_SSH_USER in vars or pass --user."
 }
 
 run_or_echo() {

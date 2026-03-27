@@ -104,6 +104,11 @@ ISO mode note:
 - `provision` captures bootstrap addresses in `generated/bootstrap-ips.txt`.
 - `prepare-bootstrap` automatically discovers and consumes that inventory before nodes switch to static IPs.
 
+Factory image note:
+
+- `generate` auto-refreshes schematics when `TALOS_CONTROL_PLANE_INSTALLER_IMAGE` or `TALOS_WORKER_INSTALLER_IMAGE` is missing/invalid.
+- `refresh-schematics` is still available when you explicitly want to rotate/update image IDs before generate.
+
 Installer image strategy (control-plane vs worker):
 
 - `TALOS_CONTROL_PLANE_INSTALLER_IMAGE` is for control-plane nodes.

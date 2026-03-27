@@ -9,7 +9,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 source "${REPO_ROOT}/overlays/base/scripts/functions.sh"
 
 ACTION=""
-LEGACY_ENV_NAME="lab"
+ENV_NAME="lab"
 VARS_FILE=""
 LOCAL_VARS_FILE=""
 PROJECT_DIR=""
@@ -28,8 +28,8 @@ usage() {
 Usage: $(basename "$0") <action> [options]
 
 Actions:
-  create-project  Create a new cluster project scaffold in --project-dir
-  generate        Generate Talos configs and rendered patches
+  create-project  Create a new cluster project scaffold in --project-dir and initialize Factory image IDs
+  generate        Generate Talos configs and rendered patches (auto-refreshes schematics if Factory images are missing)
   provision       Provision Talos VMs (create)
   prepare-bootstrap  Prepare hosts for bootstrap (discovers DHCP IPs in ISO mode and applies config)
   apply-config    Apply machine configuration to nodes
@@ -126,6 +126,38 @@ detect_talos_version_from_vars() {
     detected="$(awk -F'[:"]' '/^export TALOS_WORKER_INSTALLER_IMAGE=/{print $(NF-1)}' "${vars_file}" | head -n1)"
   fi
   printf '%s\n' "${detected}"
+}
+
+read_export_var() {
+  local file="$1"
+  local key="$2"
+  awk -F'"' -v k="${key}" '$0 ~ "^export " k "=" { print $2; exit }' "${file}"
+}
+
+is_valid_vmware_installer_image() {
+  local image="$1"
+  [[ "${image}" =~ ^factory\.talos\.dev/vmware-installer/.+:[^:]+$ ]]
+}
+
+ensure_factory_installer_images_for_generate() {
+  local vars_file="$1"
+  local project_abs="$2"
+  local cp_image=""
+  local worker_image=""
+
+  [[ -f "${vars_file}" ]] || die "vars.sh not found: ${vars_file}"
+
+  cp_image="$(read_export_var "${vars_file}" "TALOS_CONTROL_PLANE_INSTALLER_IMAGE" || true)"
+  worker_image="$(read_export_var "${vars_file}" "TALOS_WORKER_INSTALLER_IMAGE" || true)"
+
+  if is_valid_vmware_installer_image "${cp_image}" && is_valid_vmware_installer_image "${worker_image}"; then
+    return 0
+  fi
+
+  [[ -n "${project_abs}" ]] || die "Missing --project-dir. Cannot auto-refresh schematics without project context."
+  log_warn "Factory vmware-installer images are missing/invalid in vars.sh."
+  log_info "Auto-refreshing schematics before generate."
+  refresh_schematics "${vars_file}" "${project_abs}"
 }
 
 post_schematic_and_get_id() {
@@ -392,6 +424,14 @@ export VSPHERE_NETWORK="VM Network"
 export VSPHERE_FOLDER=""
 export VSPHERE_RESOURCE_POOL=""
 
+# SSH user defaults (controller -> helper VMs such as HAProxy/DNS)
+export BUILD_USERNAME="vagrant"
+export SSH_USER="vagrant"
+export ANSIBLE_USER="\${ANSIBLE_USER:-\${SSH_USER}}"
+export ANSIBLE_USERNAME="\${ANSIBLE_USERNAME:-\${SSH_USER}}"
+export SSH_PORT="22"
+export HAPROXY_SSH_USER="\${HAPROXY_SSH_USER:-\${SSH_USER}}"
+
 # Talos access endpoint
 export HAPROXY_VIP="192.168.0.30"
 export HAPROXY_NODE_1_NAME="talos-lb-1"
@@ -458,6 +498,8 @@ EOF_VARS
 export VSPHERE_ENDPOINT="192.168.0.233"
 export VSPHERE_USERNAME="root"
 export VSPHERE_PASSWORD="CHANGE_ME"
+export SSH_USER="vagrant"
+export HAPROXY_SSH_USER="vagrant"
 EOF_LOCAL
   fi
 
@@ -508,7 +550,7 @@ cluster.sh create-project --project-dir=${project_abs}
 
 1. Fill values in \`vars.sh\`.
 2. Optionally create \`vars.local.sh\` from \`vars.local.example.sh\`.
-3. Refresh Talos images from schematics:
+3. (Optional) Refresh Talos images from schematics if you changed schematic files:
 
 \`\`\`bash
 cluster.sh refresh-schematics --project-dir=${project_abs} --talos-version=v1.12.4
@@ -570,6 +612,14 @@ main() {
       [[ -n "${PROJECT_DIR}" ]] || die "--project-dir is required for create-project."
       project_name="${CLUSTER_NAME:-$(basename "${project_abs}")}"
       create_project_scaffold "${PROJECT_DIR}" "${project_name}"
+      if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[DRY-RUN] Would initialize Factory image IDs via refresh-schematics."
+      else
+        # Initialize project with concrete Factory IDs (cp + worker) and OVA URL.
+        VARS_FILE="${project_abs}/vars.sh"
+        [[ -f "${VARS_FILE}" ]] || die "Expected vars.sh after create-project: ${VARS_FILE}"
+        refresh_schematics "${VARS_FILE}" "${project_abs}"
+      fi
       return 0
       ;;
     refresh-schematics)
@@ -577,30 +627,31 @@ main() {
       return 0
       ;;
     generate)
-      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${LEGACY_ENV_NAME}" "--mode=generate")
+      ensure_factory_installer_images_for_generate "${VARS_FILE}" "${project_abs}"
+      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${ENV_NAME}" "--mode=generate")
       [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
       [[ -n "${GENERATED_DIR}" ]] && cmd+=("--generated-dir=${GENERATED_DIR}")
       [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
       ;;
     provision)
-      cmd=("${SCRIPT_DIR}/provision-cluster.sh" "--env=${LEGACY_ENV_NAME}")
+      cmd=("${SCRIPT_DIR}/provision-cluster.sh" "--env=${ENV_NAME}")
       [[ -n "${WORKER_COUNT}" ]] && cmd+=("--worker-count=${WORKER_COUNT}")
       cmd+=("create")
       ;;
     prepare-bootstrap)
-      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${LEGACY_ENV_NAME}" "--mode=apply" "--apply-stage=pre")
+      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${ENV_NAME}" "--mode=apply" "--apply-stage=pre")
       [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
       [[ -n "${GENERATED_DIR}" ]] && cmd+=("--generated-dir=${GENERATED_DIR}")
       [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
       ;;
     apply-config)
-      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${LEGACY_ENV_NAME}" "--mode=apply")
+      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${ENV_NAME}" "--mode=apply")
       [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
       [[ -n "${GENERATED_DIR}" ]] && cmd+=("--generated-dir=${GENERATED_DIR}")
       [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
       ;;
     bootstrap)
-      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${LEGACY_ENV_NAME}" "--mode=bootstrap")
+      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${ENV_NAME}" "--mode=bootstrap")
       [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
       [[ -n "${GENERATED_DIR}" ]] && cmd+=("--generated-dir=${GENERATED_DIR}")
       [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
@@ -613,12 +664,12 @@ main() {
       [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
       ;;
     sync-access)
-      cmd=("${SCRIPT_DIR}/sync-kubectl.sh" "--env=${LEGACY_ENV_NAME}")
+      cmd=("${SCRIPT_DIR}/sync-kubectl.sh" "--env=${ENV_NAME}")
       [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
       [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
       run_or_echo "${cmd[@]}"
 
-      cmd=("${SCRIPT_DIR}/sync-talosctl.sh" "--env=${LEGACY_ENV_NAME}")
+      cmd=("${SCRIPT_DIR}/sync-talosctl.sh" "--env=${ENV_NAME}")
       [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
       [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
       ;;
