@@ -767,9 +767,17 @@ run_apply() {
       fi
     else
       if [[ "${effective_apply_stage}" == "pre" ]]; then
-        if ! talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"; then
-          log_info "Insecure apply failed for ${ip}; retrying with talosconfig (expected when TLS is already required)."
+        local insecure_output=""
+        if ! insecure_output="$(talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}" 2>&1)"; then
+          if grep -qi "tls: certificate required" <<<"${insecure_output}"; then
+            log_info "Node ${ip} already requires TLS; retrying with talosconfig."
+          else
+            printf '%s\n' "${insecure_output}" >&2
+            log_warn "Insecure apply failed for ${ip}; retrying with talosconfig."
+          fi
           talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+        elif [[ -n "${insecure_output}" ]]; then
+          printf '%s\n' "${insecure_output}"
         fi
       else
         talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
@@ -796,9 +804,17 @@ run_apply() {
       fi
     else
       if [[ "${effective_apply_stage}" == "pre" ]]; then
-        if ! talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"; then
-          log_info "Insecure apply failed for ${ip}; retrying with talosconfig (expected when TLS is already required)."
+        local insecure_output=""
+        if ! insecure_output="$(talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}" 2>&1)"; then
+          if grep -qi "tls: certificate required" <<<"${insecure_output}"; then
+            log_info "Node ${ip} already requires TLS; retrying with talosconfig."
+          else
+            printf '%s\n' "${insecure_output}" >&2
+            log_warn "Insecure apply failed for ${ip}; retrying with talosconfig."
+          fi
           talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+        elif [[ -n "${insecure_output}" ]]; then
+          printf '%s\n' "${insecure_output}"
         fi
       else
         talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
