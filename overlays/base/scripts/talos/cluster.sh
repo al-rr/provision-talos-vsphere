@@ -16,7 +16,6 @@ PROJECT_DIR=""
 CLUSTER_NAME=""
 GENERATED_DIR=""
 WORKER_COUNT=""
-ADDON_NAME=""
 ADDONS_LIST=""
 TALOS_VERSION=""
 CP_SCHEMATIC_FILE=""
@@ -35,8 +34,7 @@ Actions:
   prepare-bootstrap  Prepare hosts for bootstrap (discovers DHCP IPs in ISO mode and applies config)
   apply-config    Apply machine configuration to nodes
   bootstrap       Bootstrap Talos control plane
-  apply-cluster-config  Apply mandatory post-bootstrap baseline (for example cilium, longhorn)
-  install-addons  Install one addon (via Helm phase wrapper)
+  apply-post-bootstrap  Apply mandatory post-bootstrap baseline (for example cilium, longhorn)
   sync-access     Sync local kubectl and talosctl access
   refresh-schematics  Generate schematic IDs and refresh Talos image vars in project vars.sh
 
@@ -48,8 +46,7 @@ Options:
   --cluster-name=<name>           Cluster name override
   --generated-dir=<path>          Generated output dir override
   --worker-count=<n>              Worker count override (provision only)
-  --addons=<list>                 Addon list for apply-cluster-config (CSV/JSON-like)
-  --addon=<name>                  Addon name (install-addons only)
+  --addons=<list>                 Addon list for apply-post-bootstrap (CSV/JSON-like)
   --talos-version=<version>       Talos version for image tags (example: v1.12.4)
   --cp-schematic-file=<path>      CP schematic file (default: <project>/schematic.cp.yaml)
   --worker-schematic-file=<path>  Worker schematic file (default: <project>/schematic.worker.yaml, fallback schematic.yaml)
@@ -64,8 +61,7 @@ Examples:
   $(basename "$0") prepare-bootstrap --project-dir=overlays/lab/talos/talos-dev
   $(basename "$0") apply-config --project-dir=overlays/lab/talos/talos-dev
   $(basename "$0") bootstrap --project-dir=overlays/lab/talos/talos-dev
-  $(basename "$0") apply-cluster-config --project-dir=overlays/lab/talos/talos-dev --addons='[\"cilium\",\"longhorn\"]'
-  $(basename "$0") install-addons --project-dir=overlays/lab/talos/talos-dev --addon=cilium
+  $(basename "$0") apply-post-bootstrap --project-dir=overlays/lab/talos/talos-dev --addons='[\"cilium\",\"longhorn\"]'
   $(basename "$0") sync-access --project-dir=overlays/lab/talos/talos-dev
   $(basename "$0") refresh-schematics --project-dir=overlays/lab/talos/talos-dev --talos-version=v1.12.4
 EOF_USAGE
@@ -74,7 +70,7 @@ EOF_USAGE
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      create-project|generate|provision|prepare-bootstrap|apply-config|bootstrap|apply-cluster-config|install-addons|sync-access|refresh-schematics)
+      create-project|generate|provision|prepare-bootstrap|apply-config|bootstrap|apply-post-bootstrap|sync-access|refresh-schematics)
         [[ -z "${ACTION}" ]] || die "Action already set: ${ACTION}"
         ACTION="$1"
         shift
@@ -87,7 +83,6 @@ parse_args() {
       --generated-dir=*) GENERATED_DIR="${1#*=}"; shift ;;
       --worker-count=*) WORKER_COUNT="${1#*=}"; shift ;;
       --addons=*) ADDONS_LIST="${1#*=}"; shift ;;
-      --addon=*) ADDON_NAME="${1#*=}"; shift ;;
       --talos-version=*) TALOS_VERSION="${1#*=}"; shift ;;
       --cp-schematic-file=*) CP_SCHEMATIC_FILE="${1#*=}"; shift ;;
       --worker-schematic-file=*) WORKER_SCHEMATIC_FILE="${1#*=}"; shift ;;
@@ -433,13 +428,20 @@ export TALOS_WORKER_EXTRA_DISK_GB="40"
 export TALOS_GATEWAY="192.168.0.2"
 export TALOS_NETMASK_PREFIX="24"
 export TALOS_NODE_INTERFACE="eth0"
-export TALOS_CONTROL_PLANE_VIP_ENABLED="true"
+# Keep false when using external LB (HAProxy/keepalived VIP).
+# Enable only if you intentionally run Talos CP interface VIP with a distinct IP.
+export TALOS_CONTROL_PLANE_VIP_ENABLED="false"
 export TALOS_CONTROL_PLANE_VIP="\${HAPROXY_VIP}"
 export TALOS_NAMESERVERS='["1.1.1.1","8.8.8.8"]'
 
 # CNI baseline
 export TALOS_DISABLE_DEFAULT_CNI="true"
 export TALOS_CLUSTER_BASELINE_ADDONS='["cilium"]'
+export TALOS_POST_BOOTSTRAP_HELM_AUTO_PREPARE="true"
+export TALOS_POST_BOOTSTRAP_HELM_SOURCE_MODE="path"
+export TALOS_POST_BOOTSTRAP_HELM_SOURCE_PATH="/home/vagrant/talos-vsphere-gitops/environments/lab/helm"
+export TALOS_POST_BOOTSTRAP_HELM_SOURCE_URL=""
+export TALOS_POST_BOOTSTRAP_HELM_OVERWRITE="true"
 
 # Generated artifacts and machine configs
 export TALOS_CONTROL_PLANE_CONFIG_PATH="\${PROJECT_DIR}/generated/controlplane.yaml"
@@ -488,7 +490,7 @@ spec:
     applyConfig: "cluster.sh apply-config --project-dir=${project_abs}"
     bootstrap: "cluster.sh bootstrap --project-dir=${project_abs}"
     syncAccess: "cluster.sh sync-access --project-dir=${project_abs}"
-    baseline: "cluster.sh apply-cluster-config --project-dir=${project_abs}"
+    postBootstrap: "cluster.sh apply-post-bootstrap --project-dir=${project_abs}"
 EOF_SPEC
   fi
 
@@ -521,7 +523,7 @@ cluster.sh prepare-bootstrap --project-dir=${project_abs}
 cluster.sh apply-config --project-dir=${project_abs}
 cluster.sh bootstrap --project-dir=${project_abs}
 cluster.sh sync-access --project-dir=${project_abs}
-cluster.sh apply-cluster-config --project-dir=${project_abs}
+cluster.sh apply-post-bootstrap --project-dir=${project_abs}
 \`\`\`
 EOF_README
   fi
@@ -603,16 +605,11 @@ main() {
       [[ -n "${GENERATED_DIR}" ]] && cmd+=("--generated-dir=${GENERATED_DIR}")
       [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
       ;;
-    apply-cluster-config)
-      cmd=("${SCRIPT_DIR}/apply-cluster-config.sh" "--env=${LEGACY_ENV_NAME}")
+    apply-post-bootstrap)
+      [[ -n "${PROJECT_DIR}" ]] || die "--project-dir is required for apply-post-bootstrap."
+      cmd=("${SCRIPT_DIR}/apply-post-bootstrap.sh" "--project-dir=${project_abs}")
       [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
       [[ -n "${ADDONS_LIST}" ]] && cmd+=("--addons=${ADDONS_LIST}")
-      [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
-      ;;
-    install-addons)
-      [[ -n "${ADDON_NAME}" ]] || die "--addon is required for install-addons."
-      cmd=("${SCRIPT_DIR}/phase-network-bringup.sh" "--env=${LEGACY_ENV_NAME}" "--addon=${ADDON_NAME}")
-      [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
       [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
       ;;
     sync-access)

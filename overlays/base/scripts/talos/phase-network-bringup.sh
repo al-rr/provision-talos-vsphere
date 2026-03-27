@@ -7,7 +7,9 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/overlays/base/scripts/functions.sh"
 
-ENV_NAME="lab"
+PROJECT_DIR=""
+VARS_FILE=""
+LOCAL_VARS_FILE=""
 CLUSTER_NAME=""
 ADDON_NAME="cilium"
 DRY_RUN="false"
@@ -25,10 +27,12 @@ Phase 2: Network Bring-up (Helm)
   4) post-install validations
 
 Options:
-  --env=<env>                    Overlay environment (default: lab)
+  --project-dir=<path>           Cluster project dir (required)
+  --vars-file=<path>             Optional vars override (default: <project>/vars.sh)
+  --local-vars-file=<path>       Optional local vars override (default: <project>/vars.local.sh)
   --cluster-name=<name>          Cluster name override
   --addon=<name>                 Addon name under helm/ (default: cilium)
-  --kubeconfig=<path>            Kubeconfig path (default: overlays/<env>/talos/<cluster>/generated/kubeconfig)
+  --kubeconfig=<path>            Kubeconfig path (default: <project>/generated/kubeconfig)
   --render-only                  Stop before helm upgrade --install
   -n, --dry-run                  Print actions without executing
   -h, --help                     Show help
@@ -38,13 +42,16 @@ EOF_USAGE
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --env=*) ENV_NAME="${1#*=}"; shift ;;
+      --project-dir=*) PROJECT_DIR="${1#*=}"; shift ;;
+      --vars-file=*) VARS_FILE="${1#*=}"; shift ;;
+      --local-vars-file=*) LOCAL_VARS_FILE="${1#*=}"; shift ;;
       --cluster-name=*) CLUSTER_NAME="${1#*=}"; shift ;;
       --addon=*) ADDON_NAME="${1#*=}"; shift ;;
       --kubeconfig=*) KUBECONFIG_PATH="${1#*=}"; shift ;;
       --render-only) RENDER_ONLY="true"; shift ;;
       -n|--dry-run) DRY_RUN="true"; shift ;;
       -h|--help) usage; exit 0 ;;
+      --env=*|--env) die "--env was removed. Use --project-dir." ;;
       *) usage; die "Unknown argument: $1" ;;
     esac
   done
@@ -63,6 +70,44 @@ read_release_field() {
   local file_path="$1"
   local field_name="$2"
   awk -F': ' -v key="${field_name}" '$1==key {print $2; exit}' "${file_path}" | sed -e 's/^"//' -e 's/"$//'
+}
+
+resolve_values_file_path() {
+  local release_file="$1"
+  local addon_dir="$2"
+  local values_raw="$3"
+  local candidate=""
+  local fallback_basename=""
+
+  [[ -n "${values_raw}" ]] || return 1
+
+  # 1) Absolute path
+  if [[ "${values_raw}" = /* && -f "${values_raw}" ]]; then
+    printf '%s\n' "${values_raw}"
+    return 0
+  fi
+
+  # 2) Repo-root relative path
+  candidate="$(resolve_repo_path "${values_raw}")"
+  if [[ -f "${candidate}" ]]; then
+    printf '%s\n' "${candidate}"
+    return 0
+  fi
+
+  # 3) Release-dir relative (supports "values.yaml" style)
+  if [[ -f "${addon_dir}/${values_raw}" ]]; then
+    printf '%s\n' "${addon_dir}/${values_raw}"
+    return 0
+  fi
+
+  # 4) Basename fallback for synced manifests from external repos
+  fallback_basename="$(basename "${values_raw}")"
+  if [[ -f "${addon_dir}/${fallback_basename}" ]]; then
+    printf '%s\n' "${addon_dir}/${fallback_basename}"
+    return 0
+  fi
+
+  return 1
 }
 
 run_or_echo() {
@@ -144,6 +189,9 @@ delete_namespace() {
 }
 
 main() {
+  local project_dir_abs=""
+  local vars_file=""
+  local local_vars_file=""
   local cluster_dir=""
   local helm_dir=""
   local addon_dir=""
@@ -165,10 +213,20 @@ main() {
   local ns=""
 
   parse_args "$@"
-  load_overlay_vars "${ENV_NAME}"
+  [[ -n "${PROJECT_DIR}" ]] || die "--project-dir is required."
+  project_dir_abs="$(resolve_repo_path "${PROJECT_DIR}")"
+  vars_file="${VARS_FILE:-${project_dir_abs}/vars.sh}"
+  local_vars_file="${LOCAL_VARS_FILE:-${project_dir_abs}/vars.local.sh}"
+  require_file "${vars_file}"
 
-  CLUSTER_NAME="${CLUSTER_NAME:-${TALOS_CLUSTER_NAME:-talos}}"
-  cluster_dir="$(resolve_repo_path "overlays/${ENV_NAME}/talos/${CLUSTER_NAME}")"
+  export OVERLAY_VARS_FILE="${vars_file}"
+  if [[ -f "${local_vars_file}" ]]; then
+    export OVERLAY_LOCAL_VARS_FILE="${local_vars_file}"
+  fi
+  load_overlay_vars "lab"
+
+  CLUSTER_NAME="${CLUSTER_NAME:-${TALOS_CLUSTER_NAME:-$(basename "${project_dir_abs}")}}"
+  cluster_dir="${project_dir_abs}"
   helm_dir="${cluster_dir}/helm"
   addon_dir="${helm_dir}/${ADDON_NAME}"
   release_file="${addon_dir}/release.yaml"
@@ -191,10 +249,11 @@ main() {
   [[ -n "${version}" ]] || die "version missing in ${release_file}"
   [[ -n "${values_file}" ]] || die "valuesFile missing in ${release_file}"
 
-  values_file="$(resolve_repo_path "${values_file}")"
+  values_file="$(resolve_values_file_path "${release_file}" "${addon_dir}" "${values_file}")" || \
+    die "Could not resolve valuesFile '${values_file}' from ${release_file}"
   require_file "${values_file}"
 
-  kubeconfig_file="${KUBECONFIG_PATH:-overlays/${ENV_NAME}/talos/${CLUSTER_NAME}/generated/kubeconfig}"
+  kubeconfig_file="${KUBECONFIG_PATH:-${cluster_dir}/generated/kubeconfig}"
   kubeconfig_file="$(resolve_repo_path "${kubeconfig_file}")"
 
   render_dir="${cluster_dir}/generated/helm/${ADDON_NAME}"
