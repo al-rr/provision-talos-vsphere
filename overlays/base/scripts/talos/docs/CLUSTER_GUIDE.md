@@ -252,6 +252,8 @@ After network is stable:
 Tip:
 
 - If you configured global symlinks, use `talos-gitops` directly (same pattern as `talos-cluster`).
+- In day-2 platform installs, system exclusions (for example `cilium`) are always enforced.
+  Use `--addons` and `--exclude-addons` to define the run scope for non-system addons.
 
 ## OVA vs ISO: How To Choose
 

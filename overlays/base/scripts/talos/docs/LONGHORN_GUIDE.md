@@ -40,8 +40,7 @@ Day-2 GitOps mode (from manifest source):
 
 ```bash
 ./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
-  --project-dir=overlays/lab/talos/talos \
-  --argocd-manifest-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
+  --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["longhorn"]'
 ```
 

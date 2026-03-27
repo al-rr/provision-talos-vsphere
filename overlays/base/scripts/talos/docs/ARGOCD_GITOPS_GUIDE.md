@@ -28,9 +28,43 @@ Install Argo CD first from the GitOps manifest source:
 
 ```bash
 ./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
-  --project-dir=overlays/lab/talos/talos \
-  --argocd-manifest-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
+  --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["argocd"]'
+```
+
+## Install Policy In Day-2
+
+`install-platform-helm` supports both inclusive and exclusive selection:
+
+- `--addons='[...]'`: install only the listed addons.
+- `--exclude-addons='[...]'`: skip listed addons from the resolved set (merged with system excludes; does not override them).
+
+Default behavior:
+
+- `cilium` is excluded by default in day-2 runs.
+- Reason: Cilium is a day-1 baseline dependency in this project; reapplying CNI
+  as part of broad day-2 platform sync can cause avoidable network churn.
+- System excludes are always enforced and merged with user excludes.
+- In practice, this means `install-platform-helm` is for day-2/platform addons,
+  while Cilium lifecycle stays in day-1 flow.
+
+Examples:
+
+```bash
+# Scenario 1: install broad platform set (system excludes still applied)
+./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+  --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+
+# Scenario 2: install only what you choose
+./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+  --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
+  --addons='["longhorn"]'
+
+# Scenario 2b: still selective, but skip extra addons for this run
+./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+  --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
+  --addons='["argocd","longhorn","cert-manager"]' \
+  --exclude-addons='["longhorn"]'
 ```
 
 ## Security Model For Repository Credentials

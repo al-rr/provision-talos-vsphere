@@ -132,6 +132,10 @@ Why `apply-post-bootstrap` exists:
   - Talos lifecycle in `cluster-bootstrap.sh`
   - Cluster baseline addons in `phase-network-bringup.sh` wrappers
   - Day-2 GitOps operations in `talos-gitops.sh`
+- In day-2, `talos-gitops.sh install-platform-helm` excludes `cilium` by default.
+  This protects the day-1 CNI baseline from accidental broad reapply; use
+  `--addons` and `--exclude-addons` to control exactly what should run.
+  System exclusions are always enforced and merged with user exclusions.
 
 Important:
 

@@ -91,8 +91,7 @@ Optional day-2 platform sync from GitOps source:
 
 ```bash
 ./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
-  --project-dir=overlays/lab/talos/talos \
-  --argocd-manifest-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+  --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
 ```
 
 ## Troubleshooting
