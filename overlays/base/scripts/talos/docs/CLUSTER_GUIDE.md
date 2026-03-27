@@ -227,6 +227,14 @@ Important:
   - HAProxy backend reconciliation for Talos control-plane endpoints runs in `prepare-bootstrap` only.
   - `apply-config`: Talos machine config convergence after prep (`talosctl apply-config` with talosconfig/TLS only, no insecure fallback).
   - `apply-post-bootstrap`: post-bootstrap Kubernetes baseline addons
+  - The first pod/node snapshot after Helm install is immediate and can still show `Pending`/`NotReady` for a short period.
+
+Recommended follow-up right after `apply-post-bootstrap`:
+
+```bash
+KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig kubectl -n kube-system get pods -l k8s-app=cilium -w
+KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig kubectl get nodes -w
+```
 
 ## Phase 2: Network Bring-up (Optional Extras)
 

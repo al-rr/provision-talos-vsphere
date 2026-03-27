@@ -15,6 +15,7 @@ ADDON_NAME="cilium"
 DRY_RUN="false"
 RENDER_ONLY="false"
 KUBECONFIG_PATH=""
+CILIUM_ROLLOUT_TIMEOUT="300s"
 
 usage() {
   cat <<EOF_USAGE
@@ -33,6 +34,7 @@ Options:
   --cluster-name=<name>          Cluster name override
   --addon=<name>                 Addon name under helm/ (default: cilium)
   --kubeconfig=<path>            Kubeconfig path (default: <project>/generated/kubeconfig)
+  --cilium-rollout-timeout=<dur> Timeout for Cilium rollout wait when cilium CLI is unavailable (default: 300s)
   --render-only                  Stop before helm upgrade --install
   -n, --dry-run                  Print actions without executing
   -h, --help                     Show help
@@ -48,6 +50,7 @@ parse_args() {
       --cluster-name=*) CLUSTER_NAME="${1#*=}"; shift ;;
       --addon=*) ADDON_NAME="${1#*=}"; shift ;;
       --kubeconfig=*) KUBECONFIG_PATH="${1#*=}"; shift ;;
+      --cilium-rollout-timeout=*) CILIUM_ROLLOUT_TIMEOUT="${1#*=}"; shift ;;
       --render-only) RENDER_ONLY="true"; shift ;;
       -n|--dry-run) DRY_RUN="true"; shift ;;
       -h|--help) usage; exit 0 ;;
@@ -346,12 +349,24 @@ main() {
       KUBECONFIG="${kubeconfig_file}" kubectl -n "${namespace}" get pods
     fi
     KUBECONFIG="${kubeconfig_file}" kubectl get nodes
-    if command -v cilium >/dev/null 2>&1; then
+    if [[ "${ADDON_NAME}" == "cilium" ]] && command -v cilium >/dev/null 2>&1; then
       KUBECONFIG="${kubeconfig_file}" cilium status --wait
-    else
+    elif [[ "${ADDON_NAME}" == "cilium" ]]; then
       log_warn "cilium CLI not found; skipping 'cilium status --wait'."
+      log_info "Waiting for DaemonSet/cilium rollout via kubectl (timeout: ${CILIUM_ROLLOUT_TIMEOUT})."
+      if ! KUBECONFIG="${kubeconfig_file}" kubectl -n "${namespace}" rollout status daemonset/cilium --timeout="${CILIUM_ROLLOUT_TIMEOUT}"; then
+        log_warn "Cilium rollout not ready before timeout; continue monitoring with the commands below."
+      fi
     fi
   fi
+
+  log_info "Follow-up monitoring commands:"
+  if [[ -n "${validation_selector}" ]]; then
+    log_info "  KUBECONFIG=${kubeconfig_file} kubectl -n ${namespace} get pods -l ${validation_selector} -w"
+  else
+    log_info "  KUBECONFIG=${kubeconfig_file} kubectl -n ${namespace} get pods -w"
+  fi
+  log_info "  KUBECONFIG=${kubeconfig_file} kubectl get nodes -w"
 
   log_info "Network Bring-up phase completed for addon '${ADDON_NAME}' in cluster '${CLUSTER_NAME}'."
 }

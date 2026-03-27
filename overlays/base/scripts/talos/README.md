@@ -126,6 +126,7 @@ Why `apply-post-bootstrap` exists:
 - `apply-config` after prep uses talosconfig/TLS only (no insecure fallback).
 - HAProxy backend reconciliation runs in `prepare-bootstrap` (`--apply-stage=pre`) and is not repeated in `bootstrap`.
 - `apply-post-bootstrap` is Kubernetes baseline convergence (post bootstrap), for required components such as CNI and storage.
+- `apply-post-bootstrap` prints follow-up `kubectl` watch commands because immediate validation snapshots can still show transient `Pending/NotReady`.
 - It can automatically sync day-1 helm manifests into `<project-dir>/helm` from the source declared in project vars.
 - This separation keeps strong cohesion:
   - Talos lifecycle in `cluster-bootstrap.sh`
