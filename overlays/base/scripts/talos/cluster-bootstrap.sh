@@ -36,7 +36,6 @@ ENV_NAME="lab"
 MODE="all" # generate|apply|bootstrap|all
 APPLY_STAGE="${TALOS_APPLY_STAGE:-auto}" # pre|post|auto
 DRY_RUN="false"
-USE_GLOBAL_PATCHES="false"
 ROTATE_SECRETS="false"
 FORCE_GENERATE="false"
 CLUSTER_NAME=""
@@ -49,7 +48,6 @@ AUTO_CONFIGURE_LB="true"
 VALIDATE_POST_BOOTSTRAP="true"
 VALIDATE_TIMEOUT_SECONDS="180"
 VALIDATE_INTERVAL_SECONDS="5"
-GLOBAL_PATCHES_DIR=""
 DISABLE_DEFAULT_CNI=""
 CNI_PATCH_FILE=""
 
@@ -80,9 +78,6 @@ Options:
   --validate-interval-seconds=<seconds>
                               Check interval for kube-api readiness (default: 5)
   --skip-post-validate        Skip kube-api readiness validation after bootstrap
-  --enable-global-patches     Enable shared/global patches for this run
-  --disable-global-patches    Disable shared/global patches (default)
-  --global-patches-dir=<path> Directory for enabled global patches
   --rotate-secrets            Regenerate Talos PKI secrets for this cluster
   --force-generate            Force regeneration of Talos config files
   -n, --dry-run               Show actions without executing
@@ -109,9 +104,6 @@ parse_args() {
       --validate-timeout-seconds=*) VALIDATE_TIMEOUT_SECONDS="${1#*=}"; shift ;;
       --validate-interval-seconds=*) VALIDATE_INTERVAL_SECONDS="${1#*=}"; shift ;;
       --skip-post-validate) VALIDATE_POST_BOOTSTRAP="false"; shift ;;
-      --enable-global-patches) USE_GLOBAL_PATCHES="true"; shift ;;
-      --disable-global-patches) USE_GLOBAL_PATCHES="false"; shift ;;
-      --global-patches-dir=*) GLOBAL_PATCHES_DIR="${1#*=}"; USE_GLOBAL_PATCHES="true"; shift ;;
       --rotate-secrets) ROTATE_SECRETS="true"; shift ;;
       --force-generate) FORCE_GENERATE="true"; shift ;;
       -h|--help) usage; exit 0 ;;
@@ -930,7 +922,6 @@ run_post_validation() {
 
 main() {
   local cluster_patches_dir=""
-  local global_patches_enabled_default=""
   local global_patches_dir=""
   local cp_cfg_path=""
   local cluster_patches_default=""
@@ -970,7 +961,6 @@ main() {
   fi
   DISABLE_DEFAULT_CNI="$(normalize_bool "${DISABLE_DEFAULT_CNI}")"
 
-  global_patches_enabled_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/patches-enabled")"
   cluster_patches_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/${CLUSTER_NAME}/patches")"
 
   cp_cfg_path="$(resolve_repo_path "${TALOS_CONTROL_PLANE_CONFIG_PATH:-}")"
@@ -982,18 +972,7 @@ main() {
     cluster_patches_dir="${cluster_patches_default}"
   fi
 
-  if [[ "${USE_GLOBAL_PATCHES}" == "true" ]]; then
-    if [[ -n "${GLOBAL_PATCHES_DIR}" ]]; then
-      global_patches_dir="$(resolve_repo_path "${GLOBAL_PATCHES_DIR}")"
-    else
-      global_patches_dir="${global_patches_enabled_default}"
-    fi
-    if [[ ! -d "${global_patches_dir}" ]]; then
-      die "Global patches enabled but directory not found: ${global_patches_dir}. Create it or disable global patches."
-    fi
-  else
-    global_patches_dir=""
-  fi
+  global_patches_dir=""
 
   [[ -d "${cluster_patches_dir}" ]] || log_warn "Cluster patches directory not found: ${cluster_patches_dir}. Proceeding without cluster patches."
   CNI_PATCH_FILE=""
@@ -1012,12 +991,6 @@ main() {
     log_info "Default Talos CNI/kube-proxy disable: enabled (${CNI_PATCH_FILE})"
   else
     log_info "Default Talos CNI/kube-proxy disable: disabled"
-  fi
-  if [[ "${USE_GLOBAL_PATCHES}" == "true" ]]; then
-    log_info "Global patches mode: enabled"
-    log_info "Using global patches directory: ${global_patches_dir}"
-  else
-    log_info "Global patches mode: disabled (enable with --enable-global-patches)"
   fi
   log_info "Using cluster patches directory: ${cluster_patches_dir}"
 

@@ -20,20 +20,7 @@ Current example:
 
 ## Patch Model
 
-- Global patches are optional and disabled by default.
-- Candidate global patches: `overlays/lab/talos/patches-available/`
-- Active global patches: `overlays/lab/talos/patches-enabled/`
 - Cluster-specific patches: `overlays/lab/talos/<cluster-name>/patches/`
-
-Enable global patches in bootstrap flow only when needed:
-
-```bash
-./overlays/base/scripts/talos/cluster-bootstrap.sh \
-  --env=lab \
-  --mode=all \
-  --enable-global-patches \
-  --cluster-name=talos
-```
 
 ## Cluster Creation Entry Point
 
