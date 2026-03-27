@@ -94,10 +94,10 @@ actions:
 - `create-project`
 - `generate`
 - `provision`
+- `prepare-bootstrap`
 - `apply-config`
 - `bootstrap`
-- `apply-cluster-config`
-- `install-addons`
+- `apply-post-bootstrap`
 - `sync-access`
 
 Recommended `cluster.sh` execution order:
@@ -105,11 +105,11 @@ Recommended `cluster.sh` execution order:
 0. `create-project`
 1. `generate`
 2. `provision`
-3. `apply-config`
+3. `prepare-bootstrap`
 4. `bootstrap`
-5. `sync-access`
-6. `apply-cluster-config`
-7. `install-addons` (optional extras)
+5. `apply-config` (post-bootstrap convergence, when needed)
+6. `sync-access`
+7. `apply-post-bootstrap`
 
 `cluster.sh` is project-dir first:
 
@@ -167,9 +167,10 @@ such as create only workers.
 Execute in this order for reproducible runs:
 
 1. Phase 1: Cluster Ready
-2. Phase 1.5: Post-bootstrap baseline (`apply-cluster-config`)
-3. Phase 2: Network Bring-up (optional extras)
-4. Phase 3: GitOps handoff (Argo CD as source of truth)
+2. Optional post-bootstrap config convergence (`apply-config`)
+3. Phase 1.5: Post-bootstrap baseline (`apply-post-bootstrap`)
+4. Phase 2: Network Bring-up (optional extras)
+5. Phase 3: GitOps handoff (Argo CD as source of truth)
 
 ## Phase 1: Cluster Ready
 
@@ -210,40 +211,26 @@ Optional baseline extension:
 Command:
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh apply-cluster-config --project-dir=overlays/lab/talos/talos
+./overlays/base/scripts/talos/cluster.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos
 ```
 
 With explicit list:
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh apply-cluster-config --project-dir=overlays/lab/talos/talos --addons='["cilium","longhorn"]'
+./overlays/base/scripts/talos/cluster.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos --addons='["cilium","longhorn"]'
 ```
 
 Important:
 
-- `apply-config` and `apply-cluster-config` are different steps:
-  - `apply-config`: Talos machine config (`talosctl apply-config`)
-  - `apply-cluster-config`: post-bootstrap Kubernetes baseline addons
+- `prepare-bootstrap`, `apply-config`, and `apply-post-bootstrap` are different steps:
+  - `prepare-bootstrap`: pre-bootstrap apply (`--apply-stage=pre`), used to prepare nodes before etcd bootstrap. This stage can use `talosctl apply-config --insecure` on first contact and then fallback to talosconfig if TLS is already enforced.
+  - `apply-config`: Talos machine config convergence after prep (`talosctl apply-config` with talosconfig/TLS only, no insecure fallback).
+  - `apply-post-bootstrap`: post-bootstrap Kubernetes baseline addons
 
 ## Phase 2: Network Bring-up (Optional Extras)
 
-If Cilium was not installed in Phase 1.5, install it first:
-
-```bash
-./overlays/base/scripts/talos/cilium.sh --env=lab
-```
-
-Then install optional extras such as Argo CD:
-
-```bash
-./overlays/base/scripts/talos/argocd.sh --env=lab
-```
-
-Render-only validation example:
-
-```bash
-./overlays/base/scripts/talos/cilium.sh --env=lab --render-only
-```
+For optional extras in this repository, use `talos-gitops.sh` in day-2 flow
+instead of applying ad-hoc wrappers from day-1.
 
 ## Phase 3: GitOps Handoff
 

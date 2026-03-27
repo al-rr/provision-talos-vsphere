@@ -16,7 +16,8 @@ documented in the guides linked below.
 
 | Script                                     | Purpose                                                  | Notes                                                                         |
 | ------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `cluster.sh`                               | Unified cluster lifecycle entrypoint                     | Actions: `create-project`, `generate`, `provision`, `apply-config`, `bootstrap`, `apply-cluster-config`, `install-addons`, `sync-access` |
+| `cluster.sh`                               | Unified day-1 cluster lifecycle entrypoint               | Actions: `create-project`, `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`, `apply-post-bootstrap`, `sync-access`, `refresh-schematics` |
+| `talos-gitops.sh`                          | Unified day-2 GitOps operations entrypoint               | Installs platform helms, deploys Argo CD root app, configures cluster tools   |
 | `install.sh`                               | Install or upgrade `talosctl`                            | Local or remote execution                                                     |
 | `provision-single-node.sh`                 | Provision a non-HA Talos node                            | Thin wrapper over `overlays/base/scripts/talos/govc/provision-single-node.sh` |
 | `provision-cluster.sh`                     | Provision a Talos cluster topology                       | Thin wrapper over `overlays/base/scripts/talos/govc/provision-cluster.sh`     |
@@ -82,9 +83,9 @@ Supported actions:
 - `prepare-bootstrap`
 - `apply-config`
 - `bootstrap`
-- `apply-cluster-config`
-- `install-addons`
+- `apply-post-bootstrap`
 - `sync-access`
+- `refresh-schematics`
 
 Recommended execution order:
 
@@ -93,9 +94,9 @@ Recommended execution order:
 2. `provision`
 3. `prepare-bootstrap`
 4. `bootstrap`
-5. `sync-access`
-6. `apply-cluster-config`
-7. `install-addons` (optional extras after baseline)
+5. `apply-config` (post-bootstrap convergence, when needed)
+6. `sync-access`
+7. `apply-post-bootstrap`
 
 ISO mode note:
 
@@ -113,14 +114,17 @@ Installer image strategy (control-plane vs worker):
 - If one value is not explicitly set, scripts fall back to `TALOS_INSTALLER_IMAGE`
   for compatibility.
 
-Why `apply-cluster-config` exists:
+Why `apply-post-bootstrap` exists:
 
 - `apply-config` is Talos machine configuration convergence (pre and post bootstrap).
-- `apply-cluster-config` is Kubernetes baseline convergence (post bootstrap), for required components such as CNI and storage.
+- `prepare-bootstrap` may use `talosctl apply-config --insecure` for initial node contact.
+- `apply-config` after prep uses talosconfig/TLS only (no insecure fallback).
+- `apply-post-bootstrap` is Kubernetes baseline convergence (post bootstrap), for required components such as CNI and storage.
+- It can automatically sync day-1 helm manifests into `<project-dir>/helm` from the source declared in project vars.
 - This separation keeps strong cohesion:
   - Talos lifecycle in `cluster-bootstrap.sh`
   - Cluster baseline addons in `phase-network-bringup.sh` wrappers
-  - Optional day-2 addons as separate steps
+  - Day-2 GitOps operations in `talos-gitops.sh`
 
 Important:
 
