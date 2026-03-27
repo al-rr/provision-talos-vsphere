@@ -24,10 +24,13 @@ This guide manages these addons through Argo CD `Application` resources:
 
 ## One-Time Bootstrap
 
-Install Argo CD first (Helm wrapper already exists):
+Install Argo CD first from the GitOps manifest source:
 
 ```bash
-./overlays/base/scripts/talos/argocd.sh --env=lab
+./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+  --project-dir=overlays/lab/talos/talos \
+  --argocd-manifest-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
+  --addons='["argocd"]'
 ```
 
 ## Security Model For Repository Credentials

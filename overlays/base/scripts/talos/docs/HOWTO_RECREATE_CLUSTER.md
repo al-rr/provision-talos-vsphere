@@ -81,10 +81,18 @@ If `TALOS_DISABLE_DEFAULT_CNI=true`, expect `NotReady` nodes until CNI install.
 
 ## Next Step (Phase 2)
 
-Install network addon after Phase 1 success:
+Apply day-1 post-bootstrap baseline after Phase 1 success:
 
 ```bash
-./overlays/base/scripts/talos/cilium.sh --env=lab
+./overlays/base/scripts/talos/cluster.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos
+```
+
+Optional day-2 platform sync from GitOps source:
+
+```bash
+./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+  --project-dir=overlays/lab/talos/talos \
+  --argocd-manifest-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
 ```
 
 ## Troubleshooting
@@ -93,11 +101,10 @@ Install network addon after Phase 1 success:
   - verify `overlays/<env>/scripts/vars.sh`
   - verify node patch files under `overlays/<env>/talos/<cluster>/patches`
 - Access errors after recreate:
-  - rerun access sync scripts:
+  - rerun access sync via unified command:
 
 ```bash
-./overlays/base/scripts/talos/sync-kubectl.sh --env=lab
-./overlays/base/scripts/talos/sync-talosctl.sh --env=lab
+./overlays/base/scripts/talos/cluster.sh sync-access --project-dir=overlays/lab/talos/talos
 ```
 
 ## Rollback
