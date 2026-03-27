@@ -224,6 +224,7 @@ Important:
 
 - `prepare-bootstrap`, `apply-config`, and `apply-post-bootstrap` are different steps:
   - `prepare-bootstrap`: pre-bootstrap apply (`--apply-stage=pre`), used to prepare nodes before etcd bootstrap. This stage can use `talosctl apply-config --insecure` on first contact and then fallback to talosconfig if TLS is already enforced.
+  - HAProxy backend reconciliation for Talos control-plane endpoints runs in `prepare-bootstrap` only.
   - `apply-config`: Talos machine config convergence after prep (`talosctl apply-config` with talosconfig/TLS only, no insecure fallback).
   - `apply-post-bootstrap`: post-bootstrap Kubernetes baseline addons
 

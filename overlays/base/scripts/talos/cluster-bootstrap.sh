@@ -1015,16 +1015,16 @@ main() {
       run_generate "${global_patches_dir}" "${cluster_patches_dir}"
       ;;
     apply)
-      run_lb_reconcile
+      if [[ "${APPLY_STAGE}" == "pre" ]]; then
+        run_lb_reconcile
+      fi
       run_apply "${global_patches_dir}" "${cluster_patches_dir}"
       ;;
     bootstrap)
-      run_lb_reconcile
       run_bootstrap
       ;;
     all)
       run_generate "${global_patches_dir}" "${cluster_patches_dir}"
-      run_lb_reconcile
       run_apply "${global_patches_dir}" "${cluster_patches_dir}"
       run_bootstrap
       ;;

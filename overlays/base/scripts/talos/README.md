@@ -21,7 +21,7 @@ documented in the guides linked below.
 | `install.sh`                               | Install or upgrade `talosctl`                            | Local or remote execution                                                     |
 | `provision-single-node.sh`                 | Provision a non-HA Talos node                            | Thin wrapper over `overlays/base/scripts/talos/govc/provision-single-node.sh` |
 | `provision-cluster.sh`                     | Provision a Talos cluster topology                       | Thin wrapper over `overlays/base/scripts/talos/govc/provision-cluster.sh`     |
-| `cluster-bootstrap.sh`                     | Generate configs, apply configs, and bootstrap a cluster | Used after VMs are provisioned; auto-reconciles Talos LB and validates VIP kube-api |
+| `cluster-bootstrap.sh`                     | Generate configs, apply configs, and bootstrap a cluster | Used after VMs are provisioned; reconciles HAProxy only in pre-stage (`prepare-bootstrap`) and validates VIP kube-api |
 | `phase-cluster-ready.sh`                  | Phase 1 orchestration: provision + bootstrap + validation | Includes kubeconfig artifact generation and CNI/proxy runtime checks           |
 | `phase-network-bringup.sh`                | Phase 2 orchestration: render, validate, and install addon via Helm | Reusable for `--addon=cilium` and `--addon=argocd`                            |
 | `cilium.sh`                               | Reusable Cilium lifecycle entrypoint                      | Wrapper over `phase-network-bringup.sh --addon=cilium`                         |
@@ -124,6 +124,7 @@ Why `apply-post-bootstrap` exists:
 - `apply-config` is Talos machine configuration convergence (pre and post bootstrap).
 - `prepare-bootstrap` may use `talosctl apply-config --insecure` for initial node contact.
 - `apply-config` after prep uses talosconfig/TLS only (no insecure fallback).
+- HAProxy backend reconciliation runs in `prepare-bootstrap` (`--apply-stage=pre`) and is not repeated in `bootstrap`.
 - `apply-post-bootstrap` is Kubernetes baseline convergence (post bootstrap), for required components such as CNI and storage.
 - It can automatically sync day-1 helm manifests into `<project-dir>/helm` from the source declared in project vars.
 - This separation keeps strong cohesion:
