@@ -931,8 +931,6 @@ run_post_validation() {
 main() {
   local cluster_patches_dir=""
   local global_patches_enabled_default=""
-  local global_patches_legacy_default=""
-  local global_patches_available_default=""
   local global_patches_dir=""
   local cp_cfg_path=""
   local cluster_patches_default=""
@@ -972,9 +970,7 @@ main() {
   fi
   DISABLE_DEFAULT_CNI="$(normalize_bool "${DISABLE_DEFAULT_CNI}")"
 
-  global_patches_available_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/patches-available")"
   global_patches_enabled_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/patches-enabled")"
-  global_patches_legacy_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/patches")"
   cluster_patches_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/${CLUSTER_NAME}/patches")"
 
   cp_cfg_path="$(resolve_repo_path "${TALOS_CONTROL_PLANE_CONFIG_PATH:-}")"
@@ -989,12 +985,12 @@ main() {
   if [[ "${USE_GLOBAL_PATCHES}" == "true" ]]; then
     if [[ -n "${GLOBAL_PATCHES_DIR}" ]]; then
       global_patches_dir="$(resolve_repo_path "${GLOBAL_PATCHES_DIR}")"
-    elif [[ -d "${global_patches_enabled_default}" ]]; then
-      global_patches_dir="${global_patches_enabled_default}"
     else
-      global_patches_dir="${global_patches_legacy_default}"
+      global_patches_dir="${global_patches_enabled_default}"
     fi
-    [[ -d "${global_patches_dir}" ]] || log_warn "Global patches enabled, but directory not found: ${global_patches_dir}. Proceeding without global patches."
+    if [[ ! -d "${global_patches_dir}" ]]; then
+      die "Global patches enabled but directory not found: ${global_patches_dir}. Create it or disable global patches."
+    fi
   else
     global_patches_dir=""
   fi
@@ -1020,8 +1016,6 @@ main() {
   if [[ "${USE_GLOBAL_PATCHES}" == "true" ]]; then
     log_info "Global patches mode: enabled"
     log_info "Using global patches directory: ${global_patches_dir}"
-    log_info "Global patches available directory (optional): ${global_patches_available_default}"
-    log_info "Tip: keep candidates in patches-available and only activate in patches-enabled."
   else
     log_info "Global patches mode: disabled (enable with --enable-global-patches)"
   fi
