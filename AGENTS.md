@@ -41,6 +41,13 @@
 
 - Use `shdoc` annotations on maintained shell entrypoints.
 - Use `set -euo pipefail` in maintained shell scripts.
+- Shell CLI help must follow a consistent operator format:
+  - `Usage:` line with script and primary contract
+  - `Actions:` (or `Commands:`) with one-line purpose per action
+  - `Options:` with explicit flag semantics
+  - `Examples:` with short intent comments above each example command
+  - Prefer example style similar to `kubectl -h`, where examples explain "what"
+    and "why", not only raw command syntax.
 - Prefer canonical entrypoints in `overlays/base/scripts/`.
 - Treat root `.env` usage as legacy compatibility only, never as the primary
   configuration model.

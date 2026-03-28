@@ -135,6 +135,8 @@ Why `apply-post-bootstrap` exists:
 - In day-2, `talos-gitops.sh install-platform-helm` excludes `cilium` by default.
   This protects the day-1 CNI baseline from accidental broad reapply; use
   `--addons` and `--exclude-addons` to control exactly what should run.
+  Use `talos-gitops.sh install-addon --addon=<name>` for one-addon iterative
+  tests without applying the whole platform set.
   System exclusions are always enforced and merged with user exclusions.
 - In day-2, `talos-gitops.sh` requires `--kube-context=<name>` to ensure
   commands run against the intended cluster context.

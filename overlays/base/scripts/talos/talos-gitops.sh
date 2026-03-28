@@ -12,6 +12,7 @@ ACTION=""
 MANIFEST_ROOT_DIR=""
 HELM_MANIFEST_DIR=""
 ARGOCD_MANIFEST_DIR=""
+ADDON_NAME=""
 ADDONS_RAW=""
 EXCLUDE_ADDONS_RAW=""
 SYSTEM_EXCLUDE_ADDONS_RAW="cilium"
@@ -19,13 +20,15 @@ KUBECONFIG_PATH=""
 KUBE_CONTEXT=""
 CILIUM_ROLLOUT_TIMEOUT="300s"
 DRY_RUN="false"
+KNOWN_WARNINGS_REGEX='(Warning: unrecognized format "int64"|warnings\.go:[0-9]+] "Warning: unrecognized format \\"int64\\"")'
 
 usage() {
   cat <<EOF_USAGE
 Usage: $(basename "$0") <action> [options]
 
 Actions:
-  install-platform-helm         Install/update helm addons from GitOps manifests
+  install-platform-helm         Install/update all eligible helm addons from GitOps manifests
+  install-addon                 Install/update one specific helm addon (for iterative tests)
   deploy-argocd-root-app        Apply Argo CD root app manifest
   configure-talos-cluster-tools Install platform helm and deploy Argo CD root app
 
@@ -33,6 +36,7 @@ Options:
   --manifest-root-dir=<path>     Root dir that contains helm/ and argocd/ (recommended)
   --helm-manifest-dir=<path>     Directory that contains addon folders and release.yaml
   --argocd-manifest-dir=<path>   Directory that contains root-app.yaml
+  --addon=<name>                 Single addon name for install-addon (example: cert-manager)
   --addons=<list>                CSV/JSON-like addon list override (example: ["cilium","longhorn"])
   --exclude-addons=<list>        CSV/JSON-like addons to skip in install-platform-helm (merged with system excludes)
   --kubeconfig=<path>            Kubeconfig path override (default: KUBECONFIG or ~/.kube/config)
@@ -42,10 +46,22 @@ Options:
   -h, --help                     Show help
 
 Examples:
+  # Install all platform addons except system/user excluded ones
   $(basename "$0") install-platform-helm --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+
+  # Install only one addon during iterative testing
+  $(basename "$0") install-addon --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab --addon=cert-manager
+
+  # Install only selected addons via list override
   $(basename "$0") install-platform-helm --kube-context=admin@talos-dev --helm-manifest-dir=/home/vagrant/talos-vsphere-gitops/environments/lab/helm --addons='["longhorn"]'
+
+  # Exclude specific addons in addition to system exclusions
   $(basename "$0") install-platform-helm --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab --exclude-addons='["longhorn"]'
+
+  # Deploy only Argo CD root app
   $(basename "$0") deploy-argocd-root-app --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+
+  # Full day-2 flow in one command
   $(basename "$0") configure-talos-cluster-tools --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
 EOF_USAGE
 }
@@ -53,7 +69,7 @@ EOF_USAGE
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      install-platform-helm|deploy-argocd-root-app|configure-talos-cluster-tools)
+      install-platform-helm|install-addon|deploy-argocd-root-app|configure-talos-cluster-tools)
         [[ -z "${ACTION}" ]] || die "Action already set: ${ACTION}"
         ACTION="$1"
         shift
@@ -61,6 +77,7 @@ parse_args() {
       --manifest-root-dir=*) MANIFEST_ROOT_DIR="${1#*=}"; shift ;;
       --helm-manifest-dir=*) HELM_MANIFEST_DIR="${1#*=}"; shift ;;
       --argocd-manifest-dir=*) ARGOCD_MANIFEST_DIR="${1#*=}"; shift ;;
+      --addon=*) ADDON_NAME="${1#*=}"; shift ;;
       --addons=*) ADDONS_RAW="${1#*=}"; shift ;;
       --exclude-addons=*) EXCLUDE_ADDONS_RAW="${1#*=}"; shift ;;
       --kubeconfig=*) KUBECONFIG_PATH="${1#*=}"; shift ;;
@@ -118,10 +135,28 @@ in_array() {
   return 1
 }
 
+run_with_known_warning_filter() {
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    "$@"
+    return 0
+  fi
+  "$@" 2> >(grep -Ev "${KNOWN_WARNINGS_REGEX}" >&2)
+}
+
 read_release_field() {
   local file_path="$1"
   local field_name="$2"
   awk -F': ' -v key="${field_name}" '$1==key {print $2; exit}' "${file_path}" | sed -e 's/^"//' -e 's/"$//'
+}
+
+release_exists() {
+  local kubeconfig_file="$1"
+  local namespace="$2"
+  local release_name="$3"
+
+  env KUBECONFIG="${kubeconfig_file}" helm status "${release_name}" \
+    --kube-context "${KUBE_CONTEXT}" \
+    --namespace "${namespace}" >/dev/null 2>&1
 }
 
 resolve_values_file_path() {
@@ -291,6 +326,8 @@ install_single_addon() {
   local namespace_label_enforce=""
   local namespace_label_audit=""
   local namespace_label_warn=""
+  local skip_dry_run_on_first_install=""
+  local release_already_installed="false"
   local -a extra_namespaces=()
   local ns=""
 
@@ -306,6 +343,7 @@ install_single_addon() {
   namespace_label_enforce="$(read_release_field "${release_file}" "namespaceLabelEnforce")"
   namespace_label_audit="$(read_release_field "${release_file}" "namespaceLabelAudit")"
   namespace_label_warn="$(read_release_field "${release_file}" "namespaceLabelWarn")"
+  skip_dry_run_on_first_install="$(read_release_field "${release_file}" "skipDryRunOnFirstInstall")"
 
   [[ -n "${release_name}" ]] || die "releaseName missing in ${release_file}"
   [[ -n "${namespace}" ]] || die "namespace missing in ${release_file}"
@@ -333,6 +371,9 @@ install_single_addon() {
   ensure_namespace "${kubeconfig_file}" "${namespace}"
   label_namespace_security "${kubeconfig_file}" "${namespace}" \
     "${namespace_label_enforce}" "${namespace_label_audit}" "${namespace_label_warn}"
+  if release_exists "${kubeconfig_file}" "${namespace}" "${release_name}"; then
+    release_already_installed="true"
+  fi
 
   if [[ "${addon}" == "cilium" ]]; then
     mapfile -t extra_namespaces < <(collect_cilium_secret_namespaces "${values_file}")
@@ -345,15 +386,19 @@ install_single_addon() {
   log_info "[${addon}] Phase 2/2: server-side dry-run validation"
   if [[ "${DRY_RUN}" == "true" ]]; then
     log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} kubectl --context=${KUBE_CONTEXT} apply --server-side --force-conflicts --dry-run=server -f ${render_file}"
+  elif [[ "${skip_dry_run_on_first_install}" == "true" && "${release_already_installed}" != "true" ]]; then
+    log_warn "[${addon}] Skipping server-side dry-run on first install (CRDs may not exist yet)."
   else
-    KUBECONFIG="${kubeconfig_file}" kubectl --context="${KUBE_CONTEXT}" apply --server-side --force-conflicts --dry-run=server -f "${render_file}" >/dev/null
+    run_with_known_warning_filter env KUBECONFIG="${kubeconfig_file}" \
+      kubectl --context="${KUBE_CONTEXT}" apply --server-side --force-conflicts --dry-run=server -f "${render_file}" >/dev/null
   fi
 
   log_info "[${addon}] Phase 2/3: helm upgrade --install"
   if [[ "${DRY_RUN}" == "true" ]]; then
     log_info "[DRY-RUN] KUBECONFIG=${kubeconfig_file} helm upgrade --install ${release_name} ${chart} --kube-context ${KUBE_CONTEXT} --version ${version} --namespace ${namespace} --create-namespace -f ${values_file}"
   else
-    KUBECONFIG="${kubeconfig_file}" helm upgrade --install "${release_name}" "${chart}" \
+    run_with_known_warning_filter env KUBECONFIG="${kubeconfig_file}" \
+      helm upgrade --install "${release_name}" "${chart}" \
       --kube-context "${KUBE_CONTEXT}" \
       --version "${version}" \
       --namespace "${namespace}" \
@@ -441,6 +486,9 @@ main() {
   local helm_manifest_abs=""
   local argocd_manifest_abs=""
   local kubeconfig_file=""
+  local system_exclude_csv=""
+  local system_exclude_item=""
+  local -a system_exclude=()
 
   parse_args "$@"
 
@@ -474,6 +522,22 @@ main() {
       [[ -n "${helm_manifest_abs}" ]] || die "--helm-manifest-dir is required for install-platform-helm (or use --manifest-root-dir)."
       require_dir_path "${helm_manifest_abs}"
       install_platform_helm "${helm_manifest_abs}" "${manifest_root_abs}" "${kubeconfig_file}"
+      ;;
+    install-addon)
+      [[ -n "${helm_manifest_abs}" ]] || die "--helm-manifest-dir is required for install-addon (or use --manifest-root-dir)."
+      [[ -n "${ADDON_NAME}" ]] || die "--addon is required for install-addon."
+      require_dir_path "${helm_manifest_abs}"
+      system_exclude_csv="$(normalize_csv_list "${SYSTEM_EXCLUDE_ADDONS_RAW}")"
+      if [[ -n "${system_exclude_csv}" ]]; then
+        mapfile -t system_exclude < <(csv_to_array "${system_exclude_csv}")
+        for system_exclude_item in "${system_exclude[@]}"; do
+          [[ -n "${system_exclude_item}" ]] || continue
+          if [[ "${system_exclude_item}" == "${ADDON_NAME}" ]]; then
+            die "Addon '${ADDON_NAME}' is system-excluded in day-2 flow."
+          fi
+        done
+      fi
+      install_single_addon "${helm_manifest_abs}" "${manifest_root_abs}" "${ADDON_NAME}" "${kubeconfig_file}"
       ;;
     deploy-argocd-root-app)
       [[ -n "${argocd_manifest_abs}" ]] || die "--argocd-manifest-dir is required for deploy-argocd-root-app (or use --manifest-root-dir)."
