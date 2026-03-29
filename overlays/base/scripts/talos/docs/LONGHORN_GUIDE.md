@@ -68,10 +68,13 @@ Use `kubectl port-forward` for operator access to Longhorn UI:
 
 ```bash
 KUBECONFIG=/home/vagrant/.kube/config \
-kubectl -n longhorn-system port-forward svc/longhorn-frontend 8081:80 --address 0.0.0.0
+kubectl -n longhorn-system port-forward svc/longhorn-frontend 8081:80
 ```
 
 Open: `http://localhost:8081`
+
+By default, `kubectl port-forward` binds to `localhost`. Use
+`--address 0.0.0.0` only when you intentionally want external access.
 
 ## Notes
 

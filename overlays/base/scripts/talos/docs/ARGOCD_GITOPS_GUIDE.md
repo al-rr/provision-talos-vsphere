@@ -140,41 +140,43 @@ Argo CD UI (`https://localhost:8080`):
 
 ```bash
 KUBECONFIG=/home/vagrant/.kube/config \
-kubectl -n argocd port-forward svc/argocd-server 8080:443 --address 0.0.0.0
+kubectl -n argocd port-forward svc/argocd-server 8080:443
 ```
 
 Longhorn UI (`http://localhost:8081`):
 
 ```bash
 KUBECONFIG=/home/vagrant/.kube/config \
-kubectl -n longhorn-system port-forward svc/longhorn-frontend 8081:80 --address 0.0.0.0
+kubectl -n longhorn-system port-forward svc/longhorn-frontend 8081:80
 ```
 
 Prometheus UI (`http://localhost:9090`):
 
 ```bash
 KUBECONFIG=/home/vagrant/.kube/config \
-kubectl -n kube-prometheus-stack port-forward svc/kube-prometheus-stack-prometheus 9090:9090 --address 0.0.0.0
+kubectl -n kube-prometheus-stack port-forward svc/kube-prometheus-stack-prometheus 9090:9090
 ```
 
 Grafana UI (`http://localhost:3000`):
 
 ```bash
 KUBECONFIG=/home/vagrant/.kube/config \
-kubectl -n kube-prometheus-stack port-forward svc/kube-prometheus-stack-grafana 3000:80 --address 0.0.0.0
+kubectl -n kube-prometheus-stack port-forward svc/kube-prometheus-stack-grafana 3000:80
 ```
 
 Alertmanager UI (`http://localhost:9093`):
 
 ```bash
 KUBECONFIG=/home/vagrant/.kube/config \
-kubectl -n kube-prometheus-stack port-forward svc/kube-prometheus-stack-alertmanager 9093:9093 --address 0.0.0.0
+kubectl -n kube-prometheus-stack port-forward svc/kube-prometheus-stack-alertmanager 9093:9093
 ```
 
 Notes:
 
 - Keep each `port-forward` process running while the UI is in use.
 - If a local port is busy, change the left side only (for example `18080:443`).
+- By default, `kubectl port-forward` binds to `localhost`. Use
+  `--address 0.0.0.0` only when you intentionally want external access.
 
 ## Notes
 
