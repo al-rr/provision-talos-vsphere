@@ -1,4 +1,28 @@
 #!/usr/bin/env bash
+# @file phase-network-bringup.sh
+# @brief Phase 2 Helm-based addon bring-up for Talos clusters.
+# @description
+#   Renders, validates, and installs one addon from project helm manifests.
+#   Supports render-only mode and post-install validations for cluster checks.
+#
+# @arg --project-dir path Cluster project directory (required).
+# @arg --vars-file path Optional vars file override.
+# @arg --local-vars-file path Optional local vars override.
+# @arg --cluster-name name Cluster name override.
+# @arg --addon name Addon name under helm/ (default: cilium).
+# @arg --kubeconfig path Kubeconfig path override.
+# @arg --cilium-rollout-timeout duration Cilium rollout timeout when cilium CLI is unavailable.
+# @flag --render-only Render and validate only, skip install.
+# @flag --dry-run,-n Print actions without executing.
+# @flag --help,-h Show usage information.
+#
+# @example
+#   # Bring up Cilium from project manifests
+#   ./phase-network-bringup.sh --project-dir=overlays/lab/talos/talos-dev --addon=cilium
+#
+# @example
+#   # Install Longhorn from project manifests
+#   ./phase-network-bringup.sh --project-dir=overlays/lab/talos/talos-dev --addon=longhorn
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,6 +62,16 @@ Options:
   --render-only                  Stop before helm upgrade --install
   -n, --dry-run                  Print actions without executing
   -h, --help                     Show help
+
+Examples:
+  # Bring up Cilium from project manifests
+  $(basename "$0") --project-dir=overlays/lab/talos/talos-dev --addon=cilium
+
+  # Bring up Longhorn from project manifests
+  $(basename "$0") --project-dir=overlays/lab/talos/talos-dev --addon=longhorn
+
+  # Validate rendered addon resources without installing
+  $(basename "$0") --project-dir=overlays/lab/talos/talos-dev --addon=prometheus-stack --render-only
 EOF_USAGE
 }
 

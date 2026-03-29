@@ -1,4 +1,34 @@
 #!/usr/bin/env bash
+# @file talos-gitops.sh
+# @brief Unified day-2 GitOps operations for Talos clusters.
+# @description
+#   Installs platform Helm addons from GitOps manifests and deploys Argo CD root app.
+#   Enforces explicit kube-context targeting and system addon exclusions for safer execution.
+#
+# @arg install-platform-helm action Install/update eligible platform Helm addons.
+# @arg install-addon action Install/update one specific Helm addon.
+# @arg deploy-argocd-root-app action Apply Argo CD root app manifest.
+# @arg configure-talos-cluster-tools action Run platform helm install + root app deploy.
+#
+# @arg --manifest-root-dir path Root dir that contains helm/ and argocd/.
+# @arg --helm-manifest-dir path Helm manifest dir with addon folders.
+# @arg --argocd-manifest-dir path Argo CD manifest dir containing root-app.yaml.
+# @arg --addon name Addon name for install-addon.
+# @arg --addons list Addon override list for install-platform-helm.
+# @arg --exclude-addons list Additional addon exclusions.
+# @arg --kubeconfig path Kubeconfig override path.
+# @arg --kube-context name Kubernetes context (required).
+# @arg --cilium-rollout-timeout duration Timeout for Cilium rollout fallback.
+# @flag --dry-run,-n Print actions without executing.
+# @flag --help,-h Show usage information.
+#
+# @example
+#   # Install all eligible platform addons for one environment
+#   ./talos-gitops.sh install-platform-helm --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+#
+# @example
+#   # Install one addon only during iterative tests
+#   ./talos-gitops.sh install-addon --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab --addon=cert-manager
 set -euo pipefail
 
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"

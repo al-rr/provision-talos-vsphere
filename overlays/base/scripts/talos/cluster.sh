@@ -1,4 +1,47 @@
 #!/usr/bin/env bash
+# @file cluster.sh
+# @brief Unified day-1 Talos cluster lifecycle entrypoint.
+# @description
+#   Provides project-oriented actions for Talos day-1 flows:
+#   scaffold project files, generate machine configs, provision VMs,
+#   prepare and bootstrap control planes, apply post-bootstrap machine config,
+#   synchronize local access, and refresh Talos Factory schematics.
+#
+# @arg create-project action Create project scaffold in --project-dir.
+# @arg generate action Generate Talos configs and rendered patches.
+# @arg provision action Provision Talos VMs.
+# @arg prepare-bootstrap action Prepare hosts for bootstrap pre-stage.
+# @arg apply-config action Apply machine configuration to nodes.
+# @arg bootstrap action Bootstrap Talos control plane.
+# @arg apply-post-bootstrap action Apply mandatory post-bootstrap baseline.
+# @arg sync-access action Sync local kubectl and talosctl access.
+# @arg refresh-schematics action Refresh schematic IDs and image vars.
+#
+# @arg --project-dir path Cluster project directory.
+# @arg --vars-file path Explicit vars file (advanced mode).
+# @arg --local-vars-file path Optional local override vars file.
+# @arg --cluster-name name Cluster name override.
+# @arg --generated-dir path Generated directory override.
+# @arg --worker-count int Worker count override for provision.
+# @arg --addons list Addons list for apply-post-bootstrap.
+# @arg --talos-version version Talos version for schematic image tags.
+# @arg --cp-schematic-file path Control-plane schematic file path.
+# @arg --worker-schematic-file path Worker schematic file path.
+# @flag --no-update-ova Do not rewrite TALOS_OVA_PATH on refresh-schematics.
+# @flag --dry-run,-n Print actions without executing.
+# @flag --help,-h Show usage information.
+#
+# @example
+#   # Create project scaffold and initialize schematic image IDs
+#   ./cluster.sh create-project --project-dir=overlays/lab/talos/talos-dev
+#
+# @example
+#   # Run standard day-1 sequence for an existing project
+#   ./cluster.sh generate --project-dir=overlays/lab/talos/talos-dev
+#   ./cluster.sh provision --project-dir=overlays/lab/talos/talos-dev
+#   ./cluster.sh prepare-bootstrap --project-dir=overlays/lab/talos/talos-dev
+#   ./cluster.sh bootstrap --project-dir=overlays/lab/talos/talos-dev
+#   ./cluster.sh apply-config --project-dir=overlays/lab/talos/talos-dev
 set -euo pipefail
 
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -55,14 +98,31 @@ Options:
   -h, --help                      Show this help
 
 Examples:
+  # Create project scaffold and initialize schematic image IDs
   $(basename "$0") create-project --project-dir=overlays/lab/talos/talos-dev
+
+  # Generate Talos config artifacts for the project
   $(basename "$0") generate --project-dir=overlays/lab/talos/talos-dev
+
+  # Provision project VMs on the configured virtualization backend
   $(basename "$0") provision --project-dir=overlays/lab/talos/talos-dev
+
+  # Prepare hosts for bootstrap pre-stage
   $(basename "$0") prepare-bootstrap --project-dir=overlays/lab/talos/talos-dev
+
+  # Re-apply machine configuration post-bootstrap
   $(basename "$0") apply-config --project-dir=overlays/lab/talos/talos-dev
+
+  # Bootstrap Talos control plane
   $(basename "$0") bootstrap --project-dir=overlays/lab/talos/talos-dev
+
+  # Apply mandatory post-bootstrap baseline addons
   $(basename "$0") apply-post-bootstrap --project-dir=overlays/lab/talos/talos-dev --addons='[\"cilium\",\"longhorn\"]'
+
+  # Sync local kubeconfig and talosconfig access
   $(basename "$0") sync-access --project-dir=overlays/lab/talos/talos-dev
+
+  # Refresh schematic IDs and image vars
   $(basename "$0") refresh-schematics --project-dir=overlays/lab/talos/talos-dev --talos-version=v1.12.4
 EOF_USAGE
 }

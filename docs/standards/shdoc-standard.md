@@ -50,6 +50,20 @@ Each executable script should include:
 
 Every supported CLI option must be reflected in the header and in `usage()`.
 
+## Examples In Usage
+
+- `usage()` output must include an `Examples:` section for maintained
+  entrypoints.
+- Each example should include a short intent comment (for example:
+  "Generate configs only", "Bootstrap only"), following the style used in
+  `kubectl --help`.
+
+## Function-Level Clarity
+
+- `shdoc` is required at file level for entrypoints.
+- For non-trivial helper functions inside scripts, add short inline comments to
+  clarify purpose and critical decision points.
+
 ## Drift Rule
 
 If script behavior changes, update the `shdoc` header in the same change.

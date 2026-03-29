@@ -48,6 +48,12 @@
   - `Examples:` with short intent comments above each example command
   - Prefer example style similar to `kubectl -h`, where examples explain "what"
     and "why", not only raw command syntax.
+- Maintained Bash entrypoints must include `shdoc` metadata that explains:
+  - file purpose (`@file`, `@brief`, `@description`)
+  - supported arguments/flags (`@arg`, `@flag`)
+  - practical command usage (`@example`)
+- When scripts define non-trivial helper functions, add concise inline comments
+  to explain intent and decision points.
 - Prefer canonical entrypoints in `overlays/base/scripts/`.
 - Treat root `.env` usage as legacy compatibility only, never as the primary
   configuration model.

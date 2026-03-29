@@ -1,4 +1,29 @@
 #!/usr/bin/env bash
+# @file phase-cluster-ready.sh
+# @brief Phase 1 orchestration for Talos cluster readiness.
+# @description
+#   Executes phase-1 workflow: provision VMs, run Talos bootstrap flow,
+#   publish kubeconfig artifact, and validate baseline runtime readiness checks.
+#
+# @arg --env name Overlay environment name.
+# @arg --cluster-name name Cluster name override.
+# @arg --worker-count int Worker count override for current run.
+# @flag --skip-provision Skip VM provisioning.
+# @flag --skip-bootstrap Skip bootstrap flow.
+# @flag --skip-cni-check Skip strict cni/proxy runtime check.
+# @flag --clean-recreate Destroy and recreate cluster VMs for a clean run.
+# @flag --skip-sync-access Skip local kubectl/talosctl sync.
+# @arg --kubeconfig-path path Output kubeconfig path override.
+# @flag --dry-run,-n Print actions without executing.
+# @flag --help,-h Show usage information.
+#
+# @example
+#   # Full phase-1 run on lab overlay
+#   ./phase-cluster-ready.sh --env=lab
+#
+# @example
+#   # Control-plane-only test run
+#   ./phase-cluster-ready.sh --env=lab --worker-count=0
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,6 +65,19 @@ Options:
   --kubeconfig-path=<path>       Output kubeconfig path (default: overlays/<env>/talos/<cluster>/generated/kubeconfig)
   -n, --dry-run                  Print actions without executing
   -h, --help                     Show help
+
+Examples:
+  # Full phase-1 workflow (provision + bootstrap + validations)
+  $(basename "$0") --env=lab
+
+  # Clean recreate and bootstrap from scratch
+  $(basename "$0") --env=lab --clean-recreate
+
+  # Control-plane-only test run
+  $(basename "$0") --env=lab --worker-count=0
+
+  # Bootstrap-only re-run without provisioning
+  $(basename "$0") --env=lab --skip-provision
 EOF_USAGE
 }
 

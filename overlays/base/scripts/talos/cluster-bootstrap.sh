@@ -23,6 +23,14 @@
 # @flag --skip-post-validate Skip kube-api readiness validation after bootstrap.
 # @flag --dry-run,-n Print planned actions only.
 # @flag --help,-h Show usage.
+#
+# @example
+#   # Run full day-1 bootstrap flow for lab overlay
+#   ./cluster-bootstrap.sh --env=lab --mode=all
+#
+# @example
+#   # Apply only pre-bootstrap stage with explicit control-plane and worker IPs
+#   ./cluster-bootstrap.sh --env=lab --mode=apply --apply-stage=pre --cp-ips=192.168.0.61,192.168.0.62,192.168.0.63 --worker-ips=192.168.0.71,192.168.0.72,192.168.0.73
 
 set -euo pipefail
 
@@ -82,6 +90,19 @@ Options:
   --force-generate            Force regeneration of Talos config files
   -n, --dry-run               Show actions without executing
   -h, --help                  Show help
+
+Examples:
+  # Run full day-1 Talos flow (generate + apply + bootstrap)
+  $(basename "$0") --env=lab --mode=all
+
+  # Generate configs only
+  $(basename "$0") --env=lab --mode=generate
+
+  # Apply pre-bootstrap stage only
+  $(basename "$0") --env=lab --mode=apply --apply-stage=pre
+
+  # Bootstrap only, using existing generated files
+  $(basename "$0") --env=lab --mode=bootstrap
 EOF_USAGE
 }
 
