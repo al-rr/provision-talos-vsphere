@@ -7,6 +7,7 @@ do modulo Talos.
 
 - `GETTING_STARTED.pt-br.md`
 - `CLUSTER_GUIDE.pt-br.md`
+- `ARGOCD_GITOPS_GUIDE.pt-br.md`
 
 ## Observacoes
 

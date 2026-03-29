@@ -28,7 +28,7 @@ repositorio.
 - `overlays/base/scripts/talos/README.md`
 - `overlays/base/scripts/talos/docs/pt-br/GETTING_STARTED.pt-br.md`
 - `overlays/base/scripts/talos/docs/pt-br/CLUSTER_GUIDE.pt-br.md`
-- `overlays/base/scripts/talos/docs/ARGOCD_GITOPS_GUIDE.md` (EN por enquanto)
+- `overlays/base/scripts/talos/docs/pt-br/ARGOCD_GITOPS_GUIDE.pt-br.md`
 - `overlays/base/scripts/talos/docs/LONGHORN_GUIDE.md` (EN por enquanto)
 - `overlays/base/scripts/talos/docs/CERT_MANAGER_GUIDE.md` (EN por enquanto)
 - `overlays/base/scripts/talos/docs/PROMETHEUS_STACK_GUIDE.md` (EN por enquanto)
