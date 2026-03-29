@@ -213,6 +213,8 @@ Use the document that matches your goal:
   - Use this to run a clean, reproducible cluster recreate flow.
 - [ARGOCD_GITOPS_GUIDE.md](docs/ARGOCD_GITOPS_GUIDE.md)
   - Use this to move addon lifecycle ownership to Argo CD.
+  - Includes UI access instructions via `kubectl port-forward` (Argo CD,
+    Longhorn, Grafana, Prometheus, Alertmanager).
 - [SINGLE_NODE_GUIDE.md](docs/SINGLE_NODE_GUIDE.md)
   - Use this for a non-HA Talos environment.
 - [INFRASTRUCTURE_PLAN_EXAMPLE.md](docs/INFRASTRUCTURE_PLAN_EXAMPLE.md)

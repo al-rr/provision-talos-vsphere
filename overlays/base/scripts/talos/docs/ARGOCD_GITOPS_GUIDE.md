@@ -122,46 +122,59 @@ KUBECONFIG=/home/vagrant/.kube/config kubectl -n argocd get applications
 KUBECONFIG=/home/vagrant/.kube/config kubectl -n argocd get pods
 ```
 
-## UI Access (Controller Port-Forward + Vagrant Forward)
+## UI Access (Port-Forward Model)
 
-Run `kubectl port-forward` on `talos-controller` and access from your host using
-the forwarded ports configured in `overlays/lab/Vagrantfile`.
+This project uses `kubectl port-forward` as the default operator access model
+for internal UIs.
 
-Current Vagrant mappings:
+Why:
 
-- Argo CD: host `18080` -> guest `8080`
-- Argo CD (alt): host `18443` -> guest `8443`
-- Longhorn: host `18081` -> guest `8081`
-- Grafana: host `13000` -> guest `3000`
-- Prometheus: host `19090` -> guest `9090`
-- Alertmanager: host `19093` -> guest `9093`
+- Services stay internal (typically `ClusterIP`).
+- Access is granted only to operators with valid kubeconfig/context.
+- No persistent external exposure is required for day-to-day lab operation.
 
-Argo CD UI:
+Run the command from the controller/guest session that has cluster access, then
+open the corresponding `localhost` URL on your host.
+
+Argo CD UI (`https://localhost:8080`):
 
 ```bash
 KUBECONFIG=/home/vagrant/.kube/config \
 kubectl -n argocd port-forward svc/argocd-server 8080:443 --address 0.0.0.0
 ```
 
-Open on host: `https://localhost:18080`.
-
-Longhorn UI:
+Longhorn UI (`http://localhost:8081`):
 
 ```bash
 KUBECONFIG=/home/vagrant/.kube/config \
 kubectl -n longhorn-system port-forward svc/longhorn-frontend 8081:80 --address 0.0.0.0
 ```
 
-Open on host: `http://localhost:18081`.
-
-Prometheus UI:
+Prometheus UI (`http://localhost:9090`):
 
 ```bash
 KUBECONFIG=/home/vagrant/.kube/config \
 kubectl -n kube-prometheus-stack port-forward svc/kube-prometheus-stack-prometheus 9090:9090 --address 0.0.0.0
 ```
 
-Open on host: `http://localhost:19090`.
+Grafana UI (`http://localhost:3000`):
+
+```bash
+KUBECONFIG=/home/vagrant/.kube/config \
+kubectl -n kube-prometheus-stack port-forward svc/kube-prometheus-stack-grafana 3000:80 --address 0.0.0.0
+```
+
+Alertmanager UI (`http://localhost:9093`):
+
+```bash
+KUBECONFIG=/home/vagrant/.kube/config \
+kubectl -n kube-prometheus-stack port-forward svc/kube-prometheus-stack-alertmanager 9093:9093 --address 0.0.0.0
+```
+
+Notes:
+
+- Keep each `port-forward` process running while the UI is in use.
+- If a local port is busy, change the left side only (for example `18080:443`).
 
 ## Notes
 

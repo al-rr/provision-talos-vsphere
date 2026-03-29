@@ -62,6 +62,17 @@ KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig kubectl -n longhorn-sys
 KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig kubectl get sc
 ```
 
+## UI Access (Port-Forward)
+
+Use `kubectl port-forward` for operator access to Longhorn UI:
+
+```bash
+KUBECONFIG=/home/vagrant/.kube/config \
+kubectl -n longhorn-system port-forward svc/longhorn-frontend 8081:80 --address 0.0.0.0
+```
+
+Open: `http://localhost:8081`
+
 ## Notes
 
 - Longhorn managers should run on worker nodes in this topology.
