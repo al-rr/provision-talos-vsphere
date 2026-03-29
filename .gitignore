@@ -3,6 +3,7 @@
 .ruby-lsp/
 .env
 .env.old
+overlays/*/scripts/vars.local.sh
 packer/env.local.sh
 packer/**/artifacts/*
 !packer/**/artifacts/.gitkeep
@@ -41,3 +42,7 @@ overlays/prod/talos/*/bootstrap-ips.txt
 *.img
 *.box
 provision-talos-vsphere.code-workspace
+
+# Codex CLI context
+# Keep stable project context versioned, but ignore per-session scratch state.
+.codex/current-work.md

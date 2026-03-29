@@ -4,6 +4,8 @@
 - `README.md` explains repository purpose, layout, active workflows, and key references.
 - `agenda.md` is the project roadmap and status tracker.
 - `docs/policies/*.md` defines repository rules and collaboration standards.
+- `docs/templates/*.template.md` provides canonical writing templates for
+  `GUIDE`, `HOWTO`, and `SOP` documents.
 - `docs/devops/platform-automation-architecture.md` is the concise repo-specific
   architecture and execution context reference.
 - `overlays/base` is the canonical automation layer for shared workflows.

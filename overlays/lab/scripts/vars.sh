@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # @file vars.sh
-# @description Lab overlay environment overrides (source of truth for lab values).
+# @description Lab overlay environment overrides (source of truth for non-sensitive lab defaults).
+#              Sensitive values should live in overlays/lab/scripts/vars.local.sh
+#              (loaded automatically by overlays/base/scripts/functions.sh).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
@@ -22,8 +24,9 @@ export OVERLAY_ENV="lab"
 # Environment anchors (override values only).
 export NETWORK_GATEWAY="192.168.0.2"
 export NETWORK_NETMASK_PREFIX="24"
-export NETWORK_NAMESERVERS='["192.168.0.2"]'
+export NETWORK_NAMESERVERS='["1.1.1.1","8.8.8.8"]'
 export VM_STATIC_INTERFACE="ens160"
+export HAPROXY_VM_NAMESERVERS='["1.1.1.1","8.8.8.8"]'
 
 # Build/guest account in lab (used by Packer and GOVC in-guest steps).
 export BUILD_USERNAME="vagrant"
@@ -74,7 +77,8 @@ export DNS_CLOUDINIT_PASSWORD="${DNS_VM_GUEST_PASSWORD}"
 export DNS_CLOUDINIT_PUBLIC_KEY="${DNS_CLOUDINIT_PUBLIC_KEY:-${BUILD_KEY}}"
 export DNS_DOMAIN="infra.lab"
 export DNS_LISTEN_ADDRESSES="${DNS_VM_STATIC_IP}"
-export DNS_UPSTREAM_SERVERS="1.1.1.1,8.8.8.8"
+export DNS_UPSTREAM_SERVERS="127.0.0.54"
+export DNS_USE_TCP_UPSTREAM="false"
 DNS_A_RECORDS_LIST=()
 
 # Talos topology.
@@ -87,15 +91,18 @@ export TALOS_WORKER_INSTALLER_IMAGE="factory.talos.dev/vmware-installer/c5ecff40
 export TALOS_INSTALLER_IMAGE="${TALOS_WORKER_INSTALLER_IMAGE}"
 export TALOS_CONTROL_PLANE_COUNT="3"
 export TALOS_WORKER_COUNT="3"
-export TALOS_WORKER_EXTRA_DISK_GB="100"
+export TALOS_CONTROL_PLANE_EXTRA_DISK_GB="40"
+export TALOS_WORKER_EXTRA_DISK_GB="40"
 export TALOS_CONTROL_PLANE_IPS='["192.168.0.61","192.168.0.62","192.168.0.63"]'
 export TALOS_WORKER_IPS='["192.168.0.71","192.168.0.72","192.168.0.73"]'
 export TALOS_DISABLE_DEFAULT_CNI="true"
 export TALOS_CONTROL_PLANE_NAME_PREFIX="talos-cp"
 export TALOS_WORKER_NAME_PREFIX="talos-worker"
 export TALOS_NODE_INTERFACE="eth0"
+export TALOS_CONTROL_PLANE_VIP_ENABLED="true"
+export TALOS_CONTROL_PLANE_VIP="${HAPROXY_VIP}"
 export TALOS_GATEWAY="${NETWORK_GATEWAY}"
 export TALOS_NETMASK_PREFIX="${NETWORK_NETMASK_PREFIX}"
-export TALOS_NAMESERVERS="${NETWORK_NAMESERVERS}"
+export TALOS_NAMESERVERS='["1.1.1.1","8.8.8.8"]'
 export TALOS_CONTROL_PLANE_CONFIG_PATH="overlays/lab/talos/${TALOS_CLUSTER_NAME}/generated/controlplane.yaml"
 export TALOS_WORKER_CONFIG_PATH="overlays/lab/talos/${TALOS_CLUSTER_NAME}/generated/worker.yaml"

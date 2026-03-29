@@ -16,10 +16,12 @@ documented in the guides linked below.
 
 | Script                                     | Purpose                                                  | Notes                                                                         |
 | ------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `cluster.sh`                               | Unified day-1 cluster lifecycle entrypoint               | Actions: `create-project`, `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`, `apply-post-bootstrap`, `sync-access`, `refresh-schematics` |
+| `talos-gitops.sh`                          | Unified day-2 GitOps operations entrypoint               | Installs platform helms, deploys Argo CD root app, configures cluster tools   |
 | `install.sh`                               | Install or upgrade `talosctl`                            | Local or remote execution                                                     |
 | `provision-single-node.sh`                 | Provision a non-HA Talos node                            | Thin wrapper over `overlays/base/scripts/talos/govc/provision-single-node.sh` |
 | `provision-cluster.sh`                     | Provision a Talos cluster topology                       | Thin wrapper over `overlays/base/scripts/talos/govc/provision-cluster.sh`     |
-| `cluster-bootstrap.sh`                     | Generate configs, apply configs, and bootstrap a cluster | Used after VMs are provisioned; auto-reconciles Talos LB and validates VIP kube-api |
+| `cluster-bootstrap.sh`                     | Generate configs, apply configs, and bootstrap a cluster | Used after VMs are provisioned; reconciles HAProxy only in pre-stage (`prepare-bootstrap`) and validates VIP kube-api |
 | `phase-cluster-ready.sh`                  | Phase 1 orchestration: provision + bootstrap + validation | Includes kubeconfig artifact generation and CNI/proxy runtime checks           |
 | `phase-network-bringup.sh`                | Phase 2 orchestration: render, validate, and install addon via Helm | Reusable for `--addon=cilium` and `--addon=argocd`                            |
 | `cilium.sh`                               | Reusable Cilium lifecycle entrypoint                      | Wrapper over `phase-network-bringup.sh --addon=cilium`                         |
@@ -38,6 +40,7 @@ documented in the guides linked below.
 The Talos module is split into two layers:
 
 - Talos operations:
+  - `cluster.sh`
   - `install.sh`
   - `cluster-bootstrap.sh`
   - `phase-cluster-ready.sh`
@@ -63,6 +66,125 @@ also syncs owner-scoped DNS records (`owner=talos`) after create/destroy.
 At the end of `phase-cluster-ready.sh`, local access is synchronized automatically
 for `kubectl` and `talosctl` (disable with `--skip-sync-access`).
 
+## Unified Entry Point
+
+Use `cluster.sh` as the project-oriented orchestrator with one stable CLI
+contract:
+
+```bash
+./overlays/base/scripts/talos/cluster.sh <action> [options]
+```
+
+Supported actions:
+
+- `create-project`
+- `generate`
+- `provision`
+- `prepare-bootstrap`
+- `apply-config`
+- `bootstrap`
+- `apply-post-bootstrap`
+- `sync-access`
+- `refresh-schematics`
+
+Recommended execution order:
+
+0. `create-project`
+1. `generate`
+2. `provision`
+3. `prepare-bootstrap`
+4. `bootstrap`
+5. `apply-config` (post-bootstrap convergence, when needed)
+6. `sync-access`
+7. `apply-post-bootstrap`
+
+ISO mode note:
+
+- ISO boot starts with DHCP addresses.
+- `provision` captures bootstrap addresses in `generated/bootstrap-ips.txt`.
+- `prepare-bootstrap` automatically discovers and consumes that inventory before nodes switch to static IPs.
+
+Factory image note:
+
+- `generate` auto-refreshes schematics when `TALOS_CONTROL_PLANE_INSTALLER_IMAGE` or `TALOS_WORKER_INSTALLER_IMAGE` is missing/invalid.
+- `refresh-schematics` is still available when you explicitly want to rotate/update image IDs before generate.
+
+Installer image strategy (control-plane vs worker):
+
+- `TALOS_CONTROL_PLANE_INSTALLER_IMAGE` is for control-plane nodes.
+- `TALOS_WORKER_INSTALLER_IMAGE` is for worker nodes.
+- This repository keeps them separated by design, so worker nodes can carry
+  workload/storage-specific requirements (for example Longhorn/CSI evolution)
+  without coupling those choices to control-plane/etcd nodes.
+- If one value is not explicitly set, scripts fall back to `TALOS_INSTALLER_IMAGE`
+  for compatibility.
+
+Why `apply-post-bootstrap` exists:
+
+- `apply-config` is Talos machine configuration convergence (pre and post bootstrap).
+- `prepare-bootstrap` may use `talosctl apply-config --insecure` for initial node contact.
+- `apply-config` after prep uses talosconfig/TLS only (no insecure fallback).
+- HAProxy backend reconciliation runs in `prepare-bootstrap` (`--apply-stage=pre`) and is not repeated in `bootstrap`.
+- `apply-post-bootstrap` is Kubernetes baseline convergence (post bootstrap), for required components such as CNI and storage.
+- `apply-post-bootstrap` prints follow-up `kubectl` watch commands because immediate validation snapshots can still show transient `Pending/NotReady`.
+- It can automatically sync day-1 helm manifests into `<project-dir>/helm` from the source declared in project vars.
+- This separation keeps strong cohesion:
+  - Talos lifecycle in `cluster-bootstrap.sh`
+  - Cluster baseline addons in `phase-network-bringup.sh` wrappers
+  - Day-2 GitOps operations in `talos-gitops.sh`
+- In day-2, `talos-gitops.sh install-platform-helm` excludes `cilium` by default.
+  This protects the day-1 CNI baseline from accidental broad reapply; use
+  `--addons` and `--exclude-addons` to control exactly what should run.
+  Use `talos-gitops.sh install-addon --addon=<name>` for one-addon iterative
+  tests without applying the whole platform set.
+  System exclusions are always enforced and merged with user exclusions.
+- In day-2, `talos-gitops.sh` requires `--kube-context=<name>` to ensure
+  commands run against the intended cluster context.
+
+Important:
+
+- `cluster.sh` reuses existing scripts. It does not replace module internals.
+- Preferred mode is `--project-dir=<path>`.
+- `--vars-file=<path>` remains available for advanced/manual flows.
+- `--env` is removed from `cluster.sh`; use `--project-dir` instead.
+
+## Optional Global Command
+
+If you want to run the CLIs from any directory, create symlinks in
+`/usr/local/bin`.
+
+Create/update symlink:
+
+```bash
+sudo ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster.sh /usr/local/bin/talos-cluster
+sudo ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops.sh /usr/local/bin/talos-gitops
+sudo chmod +x /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster.sh
+sudo chmod +x /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops.sh
+```
+
+Validate:
+
+```bash
+talos-cluster --help
+talos-gitops --help
+```
+
+Remove symlink:
+
+```bash
+sudo rm -f /usr/local/bin/talos-cluster
+sudo rm -f /usr/local/bin/talos-gitops
+```
+
+Without `sudo` (user-local path):
+
+```bash
+mkdir -p ~/.local/bin
+ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster.sh ~/.local/bin/talos-cluster
+ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops.sh ~/.local/bin/talos-gitops
+# ensure ~/.local/bin is in PATH
+```
+
 ## Required Tools
 
 These tools should be installed on the controller or workstation used to manage,
@@ -85,8 +207,18 @@ Use the document that matches your goal:
   - Use this for a Talos cluster with multiple control planes and workers.
 - [LONGHORN_GUIDE.md](docs/LONGHORN_GUIDE.md)
   - Use this for Longhorn prerequisites, install, and values update flow.
+- [CERT_MANAGER_GUIDE.md](docs/CERT_MANAGER_GUIDE.md)
+  - Use this for cert-manager install/upgrade and validation flow.
+- [PROMETHEUS_STACK_GUIDE.md](docs/PROMETHEUS_STACK_GUIDE.md)
+  - Use this for kube-prometheus-stack install/upgrade, validation, and UI access.
+- [HOWTO_ADD_WORKERS.md](docs/HOWTO_ADD_WORKERS.md)
+  - Use this to scale worker nodes only on an existing cluster.
+- [HOWTO_RECREATE_CLUSTER.md](docs/HOWTO_RECREATE_CLUSTER.md)
+  - Use this to run a clean, reproducible cluster recreate flow.
 - [ARGOCD_GITOPS_GUIDE.md](docs/ARGOCD_GITOPS_GUIDE.md)
   - Use this to move addon lifecycle ownership to Argo CD.
+  - Includes UI access instructions via `kubectl port-forward` (Argo CD,
+    Longhorn, Grafana, Prometheus, Alertmanager).
 - [SINGLE_NODE_GUIDE.md](docs/SINGLE_NODE_GUIDE.md)
   - Use this for a non-HA Talos environment.
 - [INFRASTRUCTURE_PLAN_EXAMPLE.md](docs/INFRASTRUCTURE_PLAN_EXAMPLE.md)

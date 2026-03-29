@@ -13,6 +13,8 @@
 - Use `set -euo pipefail`.
 - Add concise `shdoc` annotations to maintained entrypoints.
 - Write comments, logs, and usage text in English.
+- Keep `usage()` examples explanatory: each example should state what it does,
+  not only show raw command syntax.
 - Source shared helpers from `overlays/base/scripts/functions.sh`.
 - Load variables in this order:
   1. `overlays/base/scripts/vars.sh`

@@ -15,6 +15,7 @@ set -euo pipefail
 # @arg --cp-cpu int Control-plane vCPUs.
 # @arg --cp-memory-mb int Control-plane memory (MiB).
 # @arg --cp-disk-gb int Control-plane disk size (GiB).
+# @arg --cp-extra-disk-gb int Control-plane extra data disk size (GiB, optional).
 # @arg --worker-cpu int Worker vCPUs.
 # @arg --worker-memory-mb int Worker memory (MiB).
 # @arg --worker-disk-gb int Worker disk size (GiB).
@@ -40,6 +41,7 @@ WORKER_COUNT=""
 CP_CPU=""
 CP_MEMORY_MB=""
 CP_DISK_GB=""
+CP_EXTRA_DISK_GB=""
 WORKER_CPU=""
 WORKER_MEMORY_MB=""
 WORKER_DISK_GB=""
@@ -62,6 +64,7 @@ VM_FIRMWARE="efi"
 VM_GUEST_OS_TYPE="other3xLinux64Guest"
 VM_NET_ADAPTER="vmxnet3"
 VM_DISK_CONTROLLER="scsi"
+ISO_LOCAL_FILE=""
 CP_NAME_PREFIX=""
 WORKER_NAME_PREFIX=""
 CP_IPS_RAW=""
@@ -93,6 +96,7 @@ Options:
       --cp-cpu=<n>               Control-plane vCPU count
       --cp-memory-mb=<n>         Control-plane memory MiB
       --cp-disk-gb=<n>           Control-plane disk GiB
+      --cp-extra-disk-gb=<n>     Control-plane extra data disk GiB (optional)
       --worker-cpu=<n>           Worker vCPU count
       --worker-memory-mb=<n>     Worker memory MiB
       --worker-disk-gb=<n>       Worker disk GiB
@@ -136,6 +140,7 @@ parse_args() {
       --cp-cpu=*) CP_CPU="${1#*=}"; shift ;;
       --cp-memory-mb=*) CP_MEMORY_MB="${1#*=}"; shift ;;
       --cp-disk-gb=*) CP_DISK_GB="${1#*=}"; shift ;;
+      --cp-extra-disk-gb=*) CP_EXTRA_DISK_GB="${1#*=}"; shift ;;
       --worker-cpu=*) WORKER_CPU="${1#*=}"; shift ;;
       --worker-memory-mb=*) WORKER_MEMORY_MB="${1#*=}"; shift ;;
       --worker-disk-gb=*) WORKER_DISK_GB="${1#*=}"; shift ;;
@@ -203,6 +208,12 @@ is_ipv4() {
 extract_vm_ipv4() {
   local vm_name="$1"
   local ip=""
+  ip="$(timeout 3 govc vm.ip -wait 1s "${vm_name}" 2>/dev/null \
+    | awk '/^([0-9]{1,3}\.){3}[0-9]{1,3}$/ {print; exit}' || true)"
+  if [[ -n "${ip}" ]] && is_ipv4 "${ip}"; then
+    printf '%s\n' "${ip}"
+    return 0
+  fi
   ip="$(govc vm.info "${vm_name}" \
     | awk -F': ' '/IP address:/ {print $2}' \
     | tr ' ' '\n' \
@@ -235,6 +246,7 @@ load_context() {
   CP_CPU="${CP_CPU:-${TALOS_CONTROL_PLANE_CPU:-2}}"
   CP_MEMORY_MB="${CP_MEMORY_MB:-${TALOS_CONTROL_PLANE_MEMORY_MB:-4096}}"
   CP_DISK_GB="${CP_DISK_GB:-${TALOS_CONTROL_PLANE_DISK_GB:-20}}"
+  CP_EXTRA_DISK_GB="${CP_EXTRA_DISK_GB:-${TALOS_CONTROL_PLANE_EXTRA_DISK_GB:-0}}"
   WORKER_CPU="${WORKER_CPU:-${TALOS_WORKER_CPU:-2}}"
   WORKER_MEMORY_MB="${WORKER_MEMORY_MB:-${TALOS_WORKER_MEMORY_MB:-4096}}"
   WORKER_DISK_GB="${WORKER_DISK_GB:-${TALOS_WORKER_DISK_GB:-40}}"
@@ -243,6 +255,7 @@ load_context() {
   WORKER_CONFIG_PATH="${WORKER_CONFIG_PATH:-${TALOS_WORKER_CONFIG_PATH:-}}"
   ISO_DATASTORE_PATH="${ISO_DATASTORE_PATH:-${TALOS_ISO_DATASTORE_PATH:-ISOs/talos-v1.12.4-uefi.iso}}"
   OVA_PATH="${OVA_PATH:-${TALOS_OVA_PATH:-}}"
+  ISO_LOCAL_FILE="${ISO_LOCAL_FILE:-${TALOS_ISO_LOCAL_PATH:-${ISO_LOCAL_PATH:-}}}"
   VM_NETWORK="${VM_NETWORK:-${GOVC_NETWORK:-${VSPHERE_NETWORK:-}}}"
   VM_DATASTORE="${VM_DATASTORE:-${GOVC_DATASTORE:-${VSPHERE_DATASTORE:-}}}"
   VM_FOLDER="${VM_FOLDER:-${GOVC_FOLDER:-${VSPHERE_FOLDER:-}}}"
@@ -267,6 +280,9 @@ load_context() {
   if [[ -n "${OVA_PATH}" && "${OVA_PATH}" != /* && "${OVA_PATH}" != http://* && "${OVA_PATH}" != https://* ]]; then
     OVA_PATH="$(resolve_path_from_repo "${OVA_PATH}")"
   fi
+  if [[ -n "${ISO_LOCAL_FILE}" && "${ISO_LOCAL_FILE}" != /* ]]; then
+    ISO_LOCAL_FILE="$(resolve_path_from_repo "${ISO_LOCAL_FILE}")"
+  fi
   resolve_patch_files
 }
 
@@ -277,6 +293,7 @@ validate_inputs() {
   [[ "${CP_CPU}" =~ ^[0-9]+$ ]] || die "--cp-cpu must be numeric."
   [[ "${CP_MEMORY_MB}" =~ ^[0-9]+$ ]] || die "--cp-memory-mb must be numeric."
   [[ "${CP_DISK_GB}" =~ ^[0-9]+$ ]] || die "--cp-disk-gb must be numeric."
+  [[ "${CP_EXTRA_DISK_GB}" =~ ^[0-9]+$ ]] || die "--cp-extra-disk-gb must be numeric."
   [[ "${WORKER_CPU}" =~ ^[0-9]+$ ]] || die "--worker-cpu must be numeric."
   [[ "${WORKER_MEMORY_MB}" =~ ^[0-9]+$ ]] || die "--worker-memory-mb must be numeric."
   [[ "${WORKER_DISK_GB}" =~ ^[0-9]+$ ]] || die "--worker-disk-gb must be numeric."
@@ -353,7 +370,7 @@ patched_config_file() {
   local index="$3"
   local current tmp patch_file
   local -a patch_chain=()
-  local cluster_dir role_prefix named_patch=""
+  local cluster_dir role_prefix role_bootstrap_patch named_patch=""
   local -a candidate_patch_dirs=()
   local patches_dir=""
 
@@ -361,9 +378,11 @@ patched_config_file() {
   if [[ "${role}" == "control-plane" ]]; then
     patch_chain+=("${CP_PATCH_FILES[@]}")
     role_prefix="controlplane"
+    role_bootstrap_patch="cp-bootstrap.patch.yaml"
   else
     patch_chain+=("${WORKER_PATCH_FILES[@]}")
     role_prefix="worker"
+    role_bootstrap_patch="worker-bootstrap.patch.yaml"
   fi
 
   cluster_dir="$(dirname "${CP_CONFIG_PATH}")"
@@ -372,10 +391,8 @@ patched_config_file() {
 
   for patches_dir in "${candidate_patch_dirs[@]}"; do
     [[ -d "${patches_dir}" ]] || continue
-    [[ -f "${patches_dir}/${role_prefix}-common.patch.yaml" ]] && patch_chain+=("${patches_dir}/${role_prefix}-common.patch.yaml")
-    if [[ "${role}" == "control-plane" ]]; then
-      [[ -f "${patches_dir}/cp-common.patch.yaml" ]] && patch_chain+=("${patches_dir}/cp-common.patch.yaml")
-    fi
+    [[ -f "${patches_dir}/bootstrap.patch.yaml" ]] && patch_chain+=("${patches_dir}/bootstrap.patch.yaml")
+    [[ -s "${patches_dir}/${role_bootstrap_patch}" ]] && patch_chain+=("${patches_dir}/${role_bootstrap_patch}")
     [[ -f "${patches_dir}/${role_prefix}-${index}.patch.yaml" ]] && patch_chain+=("${patches_dir}/${role_prefix}-${index}.patch.yaml")
     if [[ "${role}" == "control-plane" ]]; then
       named_patch="${patches_dir}/${CP_NAME_PREFIX}-${index}.patch.yaml"
@@ -420,6 +437,36 @@ ensure_cdrom_device() {
   printf '%s\n' "${device_name}"
 }
 
+iso_exists_on_datastore() {
+  local iso_path="$1"
+  govc datastore.ls -ds "${VM_DATASTORE}" "${iso_path}" >/dev/null 2>&1
+}
+
+ensure_iso_available() {
+  local iso_dir=""
+  if [[ -n "${OVA_PATH}" ]]; then
+    return 0
+  fi
+
+  if iso_exists_on_datastore "${ISO_DATASTORE_PATH}"; then
+    return 0
+  fi
+
+  [[ -n "${ISO_LOCAL_FILE}" ]] || die "ISO mode selected and datastore ISO is missing: [${VM_DATASTORE}] ${ISO_DATASTORE_PATH}. Set ISO_LOCAL_PATH or TALOS_ISO_LOCAL_PATH to upload automatically."
+  [[ -f "${ISO_LOCAL_FILE}" ]] || die "Local ISO file not found: ${ISO_LOCAL_FILE}"
+
+  iso_dir="$(dirname "${ISO_DATASTORE_PATH}")"
+  if [[ -n "${iso_dir}" && "${iso_dir}" != "." ]]; then
+    govc datastore.mkdir -ds "${VM_DATASTORE}" "${iso_dir}" >/dev/null 2>&1 || true
+  fi
+
+  log_info "Datastore ISO not found. Uploading from local file: ${ISO_LOCAL_FILE} -> [${VM_DATASTORE}] ${ISO_DATASTORE_PATH}"
+  govc datastore.upload -ds "${VM_DATASTORE}" "${ISO_LOCAL_FILE}" "${ISO_DATASTORE_PATH}"
+
+  iso_exists_on_datastore "${ISO_DATASTORE_PATH}" || \
+    die "ISO upload finished but datastore path is still missing: [${VM_DATASTORE}] ${ISO_DATASTORE_PATH}"
+}
+
 create_vm() {
   local vm_name="$1"
   local role="$2"
@@ -435,7 +482,8 @@ create_vm() {
   local nic_device=""
   local import_args=()
   local create_args=(vm.create)
-  local extra_worker_disk_name=""
+  local extra_disk_name=""
+  local actual_firmware=""
 
   if vm_exists "${vm_name}"; then
     if [[ "${VM_OVERWRITE}" == "true" ]]; then
@@ -462,6 +510,15 @@ create_vm() {
     import_args+=("${OVA_PATH}")
     govc "${import_args[@]}"
     govc vm.change -vm "${vm_name}" -c "${cpu}" -m "${memory_mb}"
+    actual_firmware="$(govc object.collect -s "/ha-datacenter/vm/${vm_name}" config.firmware 2>/dev/null | tail -n 1 | tr -d '\r' || true)"
+    if [[ -n "${actual_firmware}" && "${actual_firmware}" != "${VM_FIRMWARE}" ]]; then
+      log_warn "OVA imported with firmware=${actual_firmware}. Adjusting to ${VM_FIRMWARE} via govc device.boot."
+      govc device.boot -vm "${vm_name}" -firmware "${VM_FIRMWARE}"
+      actual_firmware="$(govc object.collect -s "/ha-datacenter/vm/${vm_name}" config.firmware 2>/dev/null | tail -n 1 | tr -d '\r' || true)"
+      if [[ -n "${actual_firmware}" && "${actual_firmware}" != "${VM_FIRMWARE}" ]]; then
+        die "Unable to enforce firmware=${VM_FIRMWARE} on ${vm_name} (current: ${actual_firmware})."
+      fi
+    fi
     log_warn "Using OVA mode: disk size override is ignored by import.ova."
   else
     if [[ -n "${VM_FOLDER}" ]]; then
@@ -502,12 +559,21 @@ create_vm() {
     govc device.cdrom.insert -vm "${vm_name}" -device "${cdrom_device}" "${iso_full_path}"
   fi
 
-  if [[ "${role}" == "worker" && "${WORKER_EXTRA_DISK_GB}" != "0" ]]; then
-    extra_worker_disk_name="${vm_name}/disk-data"
+  if [[ "${role}" == "control-plane" && "${CP_EXTRA_DISK_GB}" != "0" ]]; then
+    extra_disk_name="${vm_name}/disk-data"
     govc vm.disk.create \
       -vm "${vm_name}" \
       -ds "${VM_DATASTORE}" \
-      -name "${extra_worker_disk_name}" \
+      -name "${extra_disk_name}" \
+      -size "${CP_EXTRA_DISK_GB}G"
+  fi
+
+  if [[ "${role}" == "worker" && "${WORKER_EXTRA_DISK_GB}" != "0" ]]; then
+    extra_disk_name="${vm_name}/disk-data"
+    govc vm.disk.create \
+      -vm "${vm_name}" \
+      -ds "${VM_DATASTORE}" \
+      -name "${extra_disk_name}" \
       -size "${WORKER_EXTRA_DISK_GB}G"
   fi
 
@@ -534,7 +600,7 @@ print_plan() {
   log_info "Talos govc plan env=${ENV_NAME} action=${ACTION}"
   log_info "cluster=${CLUSTER_NAME} cp=${CP_COUNT} worker=${WORKER_COUNT}"
   log_info "vm-name-prefixes cp=${CP_NAME_PREFIX} worker=${WORKER_NAME_PREFIX}"
-  log_info "cp(cpu=${CP_CPU},mem=${CP_MEMORY_MB},disk=${CP_DISK_GB}) worker(cpu=${WORKER_CPU},mem=${WORKER_MEMORY_MB},disk=${WORKER_DISK_GB},extra-disk=${WORKER_EXTRA_DISK_GB})"
+  log_info "cp(cpu=${CP_CPU},mem=${CP_MEMORY_MB},disk=${CP_DISK_GB},extra-disk=${CP_EXTRA_DISK_GB}) worker(cpu=${WORKER_CPU},mem=${WORKER_MEMORY_MB},disk=${WORKER_DISK_GB},extra-disk=${WORKER_EXTRA_DISK_GB})"
   log_info "network=${VM_NETWORK} datastore=${VM_DATASTORE} folder=${VM_FOLDER:-<current>} pool=${VM_RESOURCE_POOL:-<current>}"
   if [[ -n "${OVA_PATH}" ]]; then
     log_info "ova=${OVA_PATH}"
@@ -620,7 +686,7 @@ execute_action() {
 
 collect_bootstrap_ips() {
   local cluster_dir out_file tmp_file
-  local deadline now i vm_name ip fallback_ip
+  local deadline now i vm_name ip
   local total_expected=$((CP_COUNT + WORKER_COUNT))
   local found=0
   declare -A seen_ips=()
@@ -643,8 +709,6 @@ collect_bootstrap_ips() {
     for ((i = 1; i <= CP_COUNT; i++)); do
       vm_name="$(vm_name_for_role "control-plane" "${i}")"
       ip="$(extract_vm_ipv4 "${vm_name}")"
-      fallback_ip="${CP_STATIC_IPS[$((i - 1))]:-}"
-      [[ -z "${ip}" && -n "${fallback_ip}" ]] && ip="${fallback_ip}"
       if [[ -n "${ip}" && "${ip}" != "<nil>" ]] && is_ipv4 "${ip}"; then
         printf '%s %s %s\n' "control-plane-${i}" "${vm_name}" "${ip}" >> "${tmp_file}"
         seen_ips["${ip}"]=1
@@ -654,8 +718,6 @@ collect_bootstrap_ips() {
     for ((i = 1; i <= WORKER_COUNT; i++)); do
       vm_name="$(vm_name_for_role "worker" "${i}")"
       ip="$(extract_vm_ipv4 "${vm_name}")"
-      fallback_ip="${WORKER_STATIC_IPS[$((i - 1))]:-}"
-      [[ -z "${ip}" && -n "${fallback_ip}" ]] && ip="${fallback_ip}"
       if [[ -n "${ip}" && "${ip}" != "<nil>" ]] && is_ipv4 "${ip}"; then
         printf '%s %s %s\n' "worker-${i}" "${vm_name}" "${ip}" >> "${tmp_file}"
         seen_ips["${ip}"]=1
@@ -817,6 +879,7 @@ main() {
   execute_action
   dns_sync_required="${TALOS_DNS_SYNC_REQUIRED:-true}"
   if [[ "${ACTION}" == "create" ]]; then
+    ensure_iso_available
     if [[ "${dns_sync_required}" == "true" ]]; then
       if ! sync_dns_hosts_for_talos; then
         log_warn "DNS sync for Talos failed, continuing provisioning flow."
@@ -831,12 +894,6 @@ main() {
       fi
     else
       log_info "Skipping Talos DNS cleanup (TALOS_DNS_SYNC_REQUIRED=${dns_sync_required})."
-    fi
-  fi
-  if [[ "${ACTION}" == "create" && "${WAIT_BOOTSTRAP_IPS}" == "true" ]]; then
-    collect_bootstrap_ips
-    if [[ "${WAIT_TALOS_API}" == "true" ]]; then
-      wait_talos_api_ready
     fi
   fi
   log_info "Action '${ACTION}' completed successfully."

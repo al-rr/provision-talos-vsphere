@@ -23,6 +23,14 @@
 # @flag --skip-post-validate Skip kube-api readiness validation after bootstrap.
 # @flag --dry-run,-n Print planned actions only.
 # @flag --help,-h Show usage.
+#
+# @example
+#   # Run full day-1 bootstrap flow for lab overlay
+#   ./cluster-bootstrap.sh --env=lab --mode=all
+#
+# @example
+#   # Apply only pre-bootstrap stage with explicit control-plane and worker IPs
+#   ./cluster-bootstrap.sh --env=lab --mode=apply --apply-stage=pre --cp-ips=192.168.0.61,192.168.0.62,192.168.0.63 --worker-ips=192.168.0.71,192.168.0.72,192.168.0.73
 
 set -euo pipefail
 
@@ -34,8 +42,8 @@ source "${REPO_ROOT}/overlays/base/scripts/functions.sh"
 
 ENV_NAME="lab"
 MODE="all" # generate|apply|bootstrap|all
+APPLY_STAGE="${TALOS_APPLY_STAGE:-auto}" # pre|post|auto
 DRY_RUN="false"
-USE_GLOBAL_PATCHES="false"
 ROTATE_SECRETS="false"
 FORCE_GENERATE="false"
 CLUSTER_NAME=""
@@ -48,12 +56,13 @@ AUTO_CONFIGURE_LB="true"
 VALIDATE_POST_BOOTSTRAP="true"
 VALIDATE_TIMEOUT_SECONDS="180"
 VALIDATE_INTERVAL_SECONDS="5"
-GLOBAL_PATCHES_DIR=""
 DISABLE_DEFAULT_CNI=""
 CNI_PATCH_FILE=""
 
 declare -a CP_IPS=()
 declare -a WORKER_IPS=()
+declare -a APPLY_CP_IPS=()
+declare -a APPLY_WORKER_IPS=()
 
 usage() {
   cat <<EOF_USAGE
@@ -62,6 +71,7 @@ Usage: $(basename "$0") [options]
 Options:
   --env=<env>                 Overlay environment (default: lab)
   --mode=<mode>               generate|apply|bootstrap|all (default: all)
+  --apply-stage=<stage>       pre|post|auto (default: auto, used with --mode=apply)
   --cluster-name=<name>       Talos cluster name
   --endpoint=<endpoint>       Cluster endpoint (e.g. https://192.168.0.30:6443)
   --generated-dir=<path>      Output dir for generated sensitive files
@@ -76,13 +86,23 @@ Options:
   --validate-interval-seconds=<seconds>
                               Check interval for kube-api readiness (default: 5)
   --skip-post-validate        Skip kube-api readiness validation after bootstrap
-  --enable-global-patches     Enable shared/global patches for this run
-  --disable-global-patches    Disable shared/global patches (default)
-  --global-patches-dir=<path> Directory for enabled global patches
   --rotate-secrets            Regenerate Talos PKI secrets for this cluster
   --force-generate            Force regeneration of Talos config files
   -n, --dry-run               Show actions without executing
   -h, --help                  Show help
+
+Examples:
+  # Run full day-1 Talos flow (generate + apply + bootstrap)
+  $(basename "$0") --env=lab --mode=all
+
+  # Generate configs only
+  $(basename "$0") --env=lab --mode=generate
+
+  # Apply pre-bootstrap stage only
+  $(basename "$0") --env=lab --mode=apply --apply-stage=pre
+
+  # Bootstrap only, using existing generated files
+  $(basename "$0") --env=lab --mode=bootstrap
 EOF_USAGE
 }
 
@@ -91,6 +111,7 @@ parse_args() {
     case "$1" in
       --env=*) ENV_NAME="${1#*=}"; shift ;;
       --mode=*) MODE="${1#*=}"; shift ;;
+      --apply-stage=*) APPLY_STAGE="${1#*=}"; shift ;;
       -n|--dry-run) DRY_RUN="true"; shift ;;
       --cluster-name=*) CLUSTER_NAME="${1#*=}"; shift ;;
       --endpoint=*) CLUSTER_ENDPOINT="${1#*=}"; shift ;;
@@ -104,9 +125,6 @@ parse_args() {
       --validate-timeout-seconds=*) VALIDATE_TIMEOUT_SECONDS="${1#*=}"; shift ;;
       --validate-interval-seconds=*) VALIDATE_INTERVAL_SECONDS="${1#*=}"; shift ;;
       --skip-post-validate) VALIDATE_POST_BOOTSTRAP="false"; shift ;;
-      --enable-global-patches) USE_GLOBAL_PATCHES="true"; shift ;;
-      --disable-global-patches) USE_GLOBAL_PATCHES="false"; shift ;;
-      --global-patches-dir=*) GLOBAL_PATCHES_DIR="${1#*=}"; USE_GLOBAL_PATCHES="true"; shift ;;
       --rotate-secrets) ROTATE_SECRETS="true"; shift ;;
       --force-generate) FORCE_GENERATE="true"; shift ;;
       -h|--help) usage; exit 0 ;;
@@ -119,6 +137,10 @@ validate_args() {
   case "${MODE}" in
     generate|apply|bootstrap|all) ;;
     *) die "--mode must be one of: generate, apply, bootstrap, all" ;;
+  esac
+  case "${APPLY_STAGE}" in
+    pre|post|auto) ;;
+    *) die "--apply-stage must be one of: pre, post, auto" ;;
   esac
   [[ "${VALIDATE_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]] || die "--validate-timeout-seconds must be numeric."
   [[ "${VALIDATE_INTERVAL_SECONDS}" =~ ^[0-9]+$ ]] || die "--validate-interval-seconds must be numeric."
@@ -220,6 +242,164 @@ run_or_echo() {
   "$@"
 }
 
+is_ipv4() {
+  local ip="$1"
+  [[ "${ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+  local o1 o2 o3 o4
+  IFS='.' read -r o1 o2 o3 o4 <<<"${ip}"
+  (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 ))
+}
+
+discover_bootstrap_ips_for_apply() {
+  local bootstrap_file="${GENERATED_DIR}/bootstrap-ips.txt"
+  local cp_prefix="${TALOS_CONTROL_PLANE_NAME_PREFIX:-talos-cp}"
+  local worker_prefix="${TALOS_WORKER_NAME_PREFIX:-talos-worker}"
+  local timeout="${TALOS_BOOTSTRAP_DISCOVERY_TIMEOUT:-300}"
+  local interval="${TALOS_BOOTSTRAP_DISCOVERY_INTERVAL:-5}"
+  local deadline now
+  local cp_count="${#CP_IPS[@]}"
+  local worker_count="${#WORKER_IPS[@]}"
+  local expected=$((cp_count + worker_count))
+  local found=0
+  local i vm_name ip tmp_file
+  declare -A seen=()
+
+  [[ "${timeout}" =~ ^[0-9]+$ ]] || timeout="300"
+  [[ "${interval}" =~ ^[0-9]+$ ]] || interval="5"
+  (( timeout > 0 )) || timeout=300
+  (( interval > 0 )) || interval=5
+
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log_info "[DRY-RUN] discover bootstrap DHCP IPs into ${bootstrap_file}"
+    return 0
+  fi
+
+  command -v govc >/dev/null 2>&1 || die "govc is required to discover bootstrap DHCP IPs in apply-config phase."
+  export_common_tool_env >/dev/null 2>&1 || true
+
+  deadline=$(( "$(date +%s)" + timeout ))
+  mkdir -p "${GENERATED_DIR}"
+
+  while true; do
+    now="$(date +%s)"
+    (( now <= deadline )) || break
+
+    tmp_file="$(mktemp)"
+    found=0
+    seen=()
+
+    for ((i = 1; i <= cp_count; i++)); do
+      vm_name="${cp_prefix}-${i}"
+      ip="$(timeout 3 govc vm.ip -wait 1s "${vm_name}" 2>/dev/null | awk '/^([0-9]{1,3}\.){3}[0-9]{1,3}$/ {print; exit}' || true)"
+      if [[ -n "${ip}" ]] && is_ipv4 "${ip}"; then
+        printf '%s %s %s\n' "control-plane-${i}" "${vm_name}" "${ip}" >> "${tmp_file}"
+        seen["${ip}"]=1
+      fi
+    done
+
+    for ((i = 1; i <= worker_count; i++)); do
+      vm_name="${worker_prefix}-${i}"
+      ip="$(timeout 3 govc vm.ip -wait 1s "${vm_name}" 2>/dev/null | awk '/^([0-9]{1,3}\.){3}[0-9]{1,3}$/ {print; exit}' || true)"
+      if [[ -n "${ip}" ]] && is_ipv4 "${ip}"; then
+        printf '%s %s %s\n' "worker-${i}" "${vm_name}" "${ip}" >> "${tmp_file}"
+        seen["${ip}"]=1
+      fi
+    done
+
+    mv "${tmp_file}" "${bootstrap_file}"
+    found="${#seen[@]}"
+    if (( found >= expected )); then
+      log_info "Discovered bootstrap DHCP IPs for ${found}/${expected} nodes: ${bootstrap_file}"
+      return 0
+    fi
+
+    sleep "${interval}"
+  done
+
+  if [[ -s "${bootstrap_file}" ]]; then
+    log_warn "Bootstrap DHCP discovery timed out (${timeout}s). Partial inventory saved: ${bootstrap_file}"
+  else
+    log_warn "Bootstrap DHCP discovery timed out (${timeout}s) and no inventory was discovered."
+  fi
+}
+
+load_apply_target_ips() {
+  local bootstrap_file="${GENERATED_DIR}/bootstrap-ips.txt"
+  local role="" vm_name="" ip=""
+  local idx=""
+  local updates=0
+  local cp_found=0
+  local worker_found=0
+  local iso_mode="false"
+  local require_bootstrap_ips="true"
+  local static_ip=""
+  local target_ip=""
+
+  APPLY_CP_IPS=("${CP_IPS[@]}")
+  APPLY_WORKER_IPS=("${WORKER_IPS[@]}")
+
+  [[ -z "${TALOS_OVA_PATH:-}" ]] && iso_mode="true"
+  if [[ -n "${TALOS_ISO_REQUIRE_BOOTSTRAP_IPS:-}" ]]; then
+    require_bootstrap_ips="$(normalize_bool "${TALOS_ISO_REQUIRE_BOOTSTRAP_IPS}")"
+  fi
+
+  if [[ "${iso_mode}" == "true" && "${APPLY_STAGE}" != "post" ]]; then
+    discover_bootstrap_ips_for_apply
+  fi
+
+  if [[ ! -s "${bootstrap_file}" ]]; then
+    if [[ "${iso_mode}" == "true" && "${require_bootstrap_ips}" == "true" ]]; then
+      die "ISO mode requires bootstrap DHCP inventory before apply-config. Missing or empty: ${bootstrap_file}"
+    fi
+    return 0
+  fi
+
+  while read -r role vm_name ip; do
+    [[ -n "${role:-}" && -n "${ip:-}" ]] || continue
+    [[ "${ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || continue
+    if [[ "${role}" =~ ^control-plane-([0-9]+)$ ]]; then
+      idx="${BASH_REMATCH[1]}"
+      APPLY_CP_IPS[$((idx - 1))]="${ip}"
+      updates=$((updates + 1))
+      cp_found=$((cp_found + 1))
+    elif [[ "${role}" =~ ^worker-([0-9]+)$ ]]; then
+      idx="${BASH_REMATCH[1]}"
+      APPLY_WORKER_IPS[$((idx - 1))]="${ip}"
+      updates=$((updates + 1))
+      worker_found=$((worker_found + 1))
+    fi
+  done < "${bootstrap_file}"
+
+  if (( updates > 0 )); then
+    log_info "Using bootstrap inventory addresses for apply phase: ${bootstrap_file}"
+  fi
+
+  for idx in "${!CP_IPS[@]}"; do
+    static_ip="${CP_IPS[$idx]}"
+    target_ip="${APPLY_CP_IPS[$idx]:-}"
+    if [[ -n "${target_ip}" && "${target_ip}" != "${static_ip}" ]]; then
+      log_info "control-plane-$((idx + 1)) bootstrap IP ${target_ip} differs from static ${static_ip}; applying via bootstrap IP first."
+    fi
+  done
+
+  for idx in "${!WORKER_IPS[@]}"; do
+    static_ip="${WORKER_IPS[$idx]}"
+    target_ip="${APPLY_WORKER_IPS[$idx]:-}"
+    if [[ -n "${target_ip}" && "${target_ip}" != "${static_ip}" ]]; then
+      log_info "worker-$((idx + 1)) bootstrap IP ${target_ip} differs from static ${static_ip}; applying via bootstrap IP first."
+    fi
+  done
+
+  if [[ "${iso_mode}" == "true" && "${require_bootstrap_ips}" == "true" ]]; then
+    if (( cp_found < ${#CP_IPS[@]} )); then
+      die "ISO mode requires bootstrap DHCP IPs for all control-plane nodes before apply-config. Found ${cp_found}/${#CP_IPS[@]} in ${bootstrap_file}."
+    fi
+    if (( worker_found < ${#WORKER_IPS[@]} )); then
+      die "ISO mode requires bootstrap DHCP IPs for all workers before apply-config. Found ${worker_found}/${#WORKER_IPS[@]} in ${bootstrap_file}."
+    fi
+  fi
+}
+
 apply_installer_image_override() {
   local config_file="$1"
   local installer_image="$2"
@@ -247,6 +427,33 @@ EOF_PATCH
   rm -f "${patch_file}"
 }
 
+build_controlplane_vip_patch_file() {
+  local vip_enabled="${TALOS_CONTROL_PLANE_VIP_ENABLED:-true}"
+  local vip_ip="${TALOS_CONTROL_PLANE_VIP:-${HAPROXY_VIP:-}}"
+  local iface="${TALOS_NODE_INTERFACE:-eth0}"
+  local lb_vip="${HAPROXY_VIP:-}"
+  local patch_file=""
+
+  vip_enabled="$(normalize_bool "${vip_enabled}")"
+  [[ "${vip_enabled}" == "true" ]] || return 0
+  [[ -n "${vip_ip}" ]] || return 0
+  if [[ -n "${lb_vip}" && "${vip_ip}" == "${lb_vip}" ]]; then
+    die "Control-plane VIP (${vip_ip}) matches HAPROXY_VIP (${lb_vip}). Use distinct IPs, or set TALOS_CONTROL_PLANE_VIP_ENABLED=false when using external LB."
+  fi
+
+  patch_file="$(mktemp)"
+  cat > "${patch_file}" <<EOF_PATCH
+machine:
+  network:
+    interfaces:
+      - interface: ${iface}
+        vip:
+          ip: ${vip_ip}
+EOF_PATCH
+
+  printf '%s\n' "${patch_file}"
+}
+
 render_node_network_patches() {
   local cluster_patches_dir="$1"
   local cp_prefix="${TALOS_CONTROL_PLANE_NAME_PREFIX:-talos-cp}"
@@ -256,14 +463,13 @@ render_node_network_patches() {
   local netmask="${TALOS_NETMASK_PREFIX:-${NETWORK_NETMASK_PREFIX:-24}}"
   local dns_raw="${TALOS_NAMESERVERS:-${NETWORK_NAMESERVERS:-}}"
   local dns_csv=""
+  local dns_ip=""
+  local -a dns_list=()
   local idx=1
   local ip=""
   local patch_file=""
-  local dns_ip=""
-  local -a dns_list=()
 
   mkdir -p "${cluster_patches_dir}"
-
   dns_csv="$(normalize_csv_list "${dns_raw}")"
   if [[ -n "${dns_csv}" ]]; then
     mapfile -t dns_list < <(csv_to_array "${dns_csv}")
@@ -319,30 +525,74 @@ render_node_network_patches() {
   done
 }
 
+render_bootstrap_patch() {
+  local cluster_patches_dir="$1"
+  local bootstrap_patch_file="${cluster_patches_dir}/bootstrap.patch.yaml"
+  local dns_raw="${TALOS_NAMESERVERS:-${NETWORK_NAMESERVERS:-}}"
+  local dns_csv=""
+  local dns_ip=""
+  local -a dns_list=()
+  local include_nameservers="${TALOS_BOOTSTRAP_INCLUDE_NAMESERVERS:-false}"
+  local time_disabled="${TALOS_BOOTSTRAP_TIME_DISABLED:-true}"
+  local hostdns_enabled="${TALOS_BOOTSTRAP_HOST_DNS_ENABLED:-false}"
+  local hostdns_forward="${TALOS_BOOTSTRAP_FORWARD_KUBE_DNS_TO_HOST:-false}"
+
+  mkdir -p "${cluster_patches_dir}"
+
+  dns_csv="$(normalize_csv_list "${dns_raw}")"
+  if [[ -n "${dns_csv}" ]]; then
+    mapfile -t dns_list < <(csv_to_array "${dns_csv}")
+  fi
+  include_nameservers="$(normalize_bool "${include_nameservers}")"
+
+  {
+    echo "machine:"
+    echo "  time:"
+    echo "    disabled: ${time_disabled}"
+    echo "  features:"
+    echo "    hostDNS:"
+    echo "      enabled: ${hostdns_enabled}"
+    echo "      forwardKubeDNSToHost: ${hostdns_forward}"
+    if [[ "${include_nameservers}" == "true" ]] && (( ${#dns_list[@]} > 0 )); then
+      echo "  network:"
+      echo "    nameservers:"
+      for dns_ip in "${dns_list[@]}"; do
+        [[ -n "${dns_ip}" ]] || continue
+        echo "      - ${dns_ip}"
+      done
+    fi
+  } > "${bootstrap_patch_file}"
+}
+
 build_generate_patch_args() {
   local kind="$1"
   local global_patches_dir="$2"
   local cluster_patches_dir="$3"
-  local common_alias=""
+  local role_bootstrap_patch=""
+  local role_common_patch=""
   local -a args=()
 
   if [[ "${kind}" == "control-plane" ]]; then
-    common_alias="cp-common.patch.yaml"
+    role_bootstrap_patch="cp-bootstrap.patch.yaml"
+    role_common_patch="cp.patch.yaml"
   else
-    common_alias="${kind}-common.patch.yaml"
+    role_bootstrap_patch="worker-bootstrap.patch.yaml"
+    role_common_patch="worker.patch.yaml"
   fi
 
   if [[ -n "${global_patches_dir}" && -d "${global_patches_dir}" ]]; then
     [[ -f "${global_patches_dir}/dns.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${global_patches_dir}/dns.patch.yaml")
     [[ -f "${global_patches_dir}/flannel.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${global_patches_dir}/flannel.patch.yaml")
-    [[ -f "${global_patches_dir}/${kind}-common.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${global_patches_dir}/${kind}-common.patch.yaml")
-    [[ -f "${global_patches_dir}/${common_alias}" ]] && args+=("--config-patch-${kind}" "@${global_patches_dir}/${common_alias}")
   fi
 
   [[ -n "${CNI_PATCH_FILE}" ]] && args+=("--config-patch-${kind}" "@${CNI_PATCH_FILE}")
+  [[ -f "${cluster_patches_dir}/bootstrap.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/bootstrap.patch.yaml")
+  [[ -f "${cluster_patches_dir}/${role_common_patch}" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/${role_common_patch}")
+  [[ -s "${cluster_patches_dir}/${role_bootstrap_patch}" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/${role_bootstrap_patch}")
+  if [[ "${kind}" == "worker" ]]; then
+    [[ -f "${cluster_patches_dir}/longhorn.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/longhorn.patch.yaml")
+  fi
   [[ -f "${cluster_patches_dir}/dns.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/dns.patch.yaml")
-  [[ -f "${cluster_patches_dir}/${kind}-common.patch.yaml" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/${kind}-common.patch.yaml")
-  [[ -f "${cluster_patches_dir}/${common_alias}" ]] && args+=("--config-patch-${kind}" "@${cluster_patches_dir}/${common_alias}")
 
   printf '%s\n' "${args[@]}"
 }
@@ -355,31 +605,38 @@ patch_for_node() {
   local cluster_patches_dir="$5"
   local cp_prefix="${TALOS_CONTROL_PLANE_NAME_PREFIX:-talos-cp}"
   local worker_prefix="${TALOS_WORKER_NAME_PREFIX:-talos-worker}"
-  local common_alias=""
   local named_patch=""
+  local role_bootstrap_patch=""
+  local role_common_patch=""
   local current=""
   local tmp=""
   local patch=""
   local -a chain=()
 
+  if [[ "${kind}" == "controlplane" ]]; then
+    role_bootstrap_patch="cp-bootstrap.patch.yaml"
+    role_common_patch="cp.patch.yaml"
+  else
+    role_bootstrap_patch="worker-bootstrap.patch.yaml"
+    role_common_patch="worker.patch.yaml"
+  fi
+
   if [[ -n "${global_patches_dir}" && -d "${global_patches_dir}" ]]; then
+    [[ -f "${global_patches_dir}/bootstrap.patch.yaml" ]] && chain+=("${global_patches_dir}/bootstrap.patch.yaml")
+    [[ -s "${global_patches_dir}/${role_bootstrap_patch}" ]] && chain+=("${global_patches_dir}/${role_bootstrap_patch}")
     [[ -f "${global_patches_dir}/dns.patch.yaml" ]] && chain+=("${global_patches_dir}/dns.patch.yaml")
     [[ -f "${global_patches_dir}/flannel.patch.yaml" ]] && chain+=("${global_patches_dir}/flannel.patch.yaml")
-    [[ -f "${global_patches_dir}/${kind}-common.patch.yaml" ]] && chain+=("${global_patches_dir}/${kind}-common.patch.yaml")
-    if [[ "${kind}" == "controlplane" ]]; then
-      common_alias="cp-common.patch.yaml"
-      [[ -f "${global_patches_dir}/${common_alias}" ]] && chain+=("${global_patches_dir}/${common_alias}")
-    fi
     [[ -f "${global_patches_dir}/${kind}-${index}.patch.yaml" ]] && chain+=("${global_patches_dir}/${kind}-${index}.patch.yaml")
   fi
 
   [[ -n "${CNI_PATCH_FILE}" ]] && chain+=("${CNI_PATCH_FILE}")
-  [[ -f "${cluster_patches_dir}/dns.patch.yaml" ]] && chain+=("${cluster_patches_dir}/dns.patch.yaml")
-  [[ -f "${cluster_patches_dir}/${kind}-common.patch.yaml" ]] && chain+=("${cluster_patches_dir}/${kind}-common.patch.yaml")
-  if [[ "${kind}" == "controlplane" ]]; then
-    common_alias="cp-common.patch.yaml"
-    [[ -f "${cluster_patches_dir}/${common_alias}" ]] && chain+=("${cluster_patches_dir}/${common_alias}")
+  [[ -f "${cluster_patches_dir}/bootstrap.patch.yaml" ]] && chain+=("${cluster_patches_dir}/bootstrap.patch.yaml")
+  [[ -f "${cluster_patches_dir}/${role_common_patch}" ]] && chain+=("${cluster_patches_dir}/${role_common_patch}")
+  [[ -s "${cluster_patches_dir}/${role_bootstrap_patch}" ]] && chain+=("${cluster_patches_dir}/${role_bootstrap_patch}")
+  if [[ "${kind}" == "worker" ]]; then
+    [[ -f "${cluster_patches_dir}/longhorn.patch.yaml" ]] && chain+=("${cluster_patches_dir}/longhorn.patch.yaml")
   fi
+  [[ -f "${cluster_patches_dir}/dns.patch.yaml" ]] && chain+=("${cluster_patches_dir}/dns.patch.yaml")
   [[ -f "${cluster_patches_dir}/${kind}-${index}.patch.yaml" ]] && chain+=("${cluster_patches_dir}/${kind}-${index}.patch.yaml")
   if [[ "${kind}" == "controlplane" ]]; then
     named_patch="${cluster_patches_dir}/${cp_prefix}-${index}.patch.yaml"
@@ -421,6 +678,7 @@ run_generate() {
   local -a cp_patch_args=()
   local -a worker_patch_args=()
   local secrets_file=""
+  local cp_vip_patch_file=""
   local -a gen_args=()
 
   mkdir -p "${GENERATED_DIR}"
@@ -437,6 +695,12 @@ run_generate() {
   while IFS= read -r arg; do
     [[ -n "${arg}" ]] && cp_patch_args+=("${arg}")
   done < <(build_generate_patch_args "control-plane" "${global_patches_dir}" "${cluster_patches_dir}")
+
+  cp_vip_patch_file="$(build_controlplane_vip_patch_file || true)"
+  if [[ -n "${cp_vip_patch_file}" ]]; then
+    log_info "Injecting control-plane VIP in generated config: ${TALOS_CONTROL_PLANE_VIP:-${HAPROXY_VIP:-}} (interface: ${TALOS_NODE_INTERFACE:-eth0})"
+    cp_patch_args+=("--config-patch-control-plane" "@${cp_vip_patch_file}")
+  fi
 
   while IFS= read -r arg; do
     [[ -n "${arg}" ]] && worker_patch_args+=("${arg}")
@@ -463,6 +727,10 @@ run_generate() {
 
   log_info "Generating Talos configs into ${GENERATED_DIR}"
   run_or_echo talosctl "${gen_args[@]}"
+
+  if [[ -n "${cp_vip_patch_file}" ]]; then
+    rm -f "${cp_vip_patch_file}"
+  fi
 
   if [[ "${DRY_RUN}" == "true" ]]; then
     return 0
@@ -492,21 +760,47 @@ run_apply() {
   local ip=""
   local cfg=""
   local talosconfig_path="${GENERATED_DIR}/talosconfig"
+  local effective_apply_stage="${APPLY_STAGE}"
 
   if [[ "${DRY_RUN}" != "true" ]]; then
     [[ -f "${cp_base}" ]] || die "Missing generated controlplane config: ${cp_base}. Run --mode=generate first."
     [[ -f "${worker_base}" ]] || die "Missing generated worker config: ${worker_base}. Run --mode=generate first."
   fi
 
+  log_info "Apply stage: ${APPLY_STAGE}"
+  load_apply_target_ips
+  if [[ "${effective_apply_stage}" == "auto" ]]; then
+    # In cluster.sh flow:
+    # - prepare-bootstrap forces --apply-stage=pre
+    # - apply-config uses auto and is typically post-bootstrap convergence
+    effective_apply_stage="post"
+  fi
+
   idx=1
-  for ip in "${CP_IPS[@]}"; do
+  for ip in "${APPLY_CP_IPS[@]}"; do
     cfg="$(patch_for_node "${cp_base}" "controlplane" "${idx}" "${global_patches_dir}" "${cluster_patches_dir}")"
     log_info "Applying control-plane config to ${ip}"
     if [[ "${DRY_RUN}" == "true" ]]; then
-      run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+      if [[ "${effective_apply_stage}" == "pre" ]]; then
+        run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+      else
+        run_or_echo talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+      fi
     else
-      if ! talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"; then
-        log_warn "Insecure apply failed for ${ip}, retrying with talosconfig."
+      if [[ "${effective_apply_stage}" == "pre" ]]; then
+        local insecure_output=""
+        if ! insecure_output="$(talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}" 2>&1)"; then
+          if grep -qi "tls: certificate required" <<<"${insecure_output}"; then
+            log_info "Node ${ip} already requires TLS; retrying with talosconfig."
+          else
+            printf '%s\n' "${insecure_output}" >&2
+            log_warn "Insecure apply failed for ${ip}; retrying with talosconfig."
+          fi
+          talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+        elif [[ -n "${insecure_output}" ]]; then
+          printf '%s\n' "${insecure_output}"
+        fi
+      else
         talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
       fi
     fi
@@ -514,20 +808,36 @@ run_apply() {
     idx=$((idx + 1))
   done
 
-  if (( ${#WORKER_IPS[@]} == 0 )); then
+  if (( ${#APPLY_WORKER_IPS[@]} == 0 )); then
     log_warn "Worker IP list is empty; skipping worker apply phase."
     return 0
   fi
 
   idx=1
-  for ip in "${WORKER_IPS[@]}"; do
+  for ip in "${APPLY_WORKER_IPS[@]}"; do
     cfg="$(patch_for_node "${worker_base}" "worker" "${idx}" "${global_patches_dir}" "${cluster_patches_dir}")"
     log_info "Applying worker config to ${ip}"
     if [[ "${DRY_RUN}" == "true" ]]; then
-      run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+      if [[ "${effective_apply_stage}" == "pre" ]]; then
+        run_or_echo talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"
+      else
+        run_or_echo talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+      fi
     else
-      if ! talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}"; then
-        log_warn "Insecure apply failed for ${ip}, retrying with talosconfig."
+      if [[ "${effective_apply_stage}" == "pre" ]]; then
+        local insecure_output=""
+        if ! insecure_output="$(talosctl apply-config --insecure --nodes "${ip}" --file "${cfg}" 2>&1)"; then
+          if grep -qi "tls: certificate required" <<<"${insecure_output}"; then
+            log_info "Node ${ip} already requires TLS; retrying with talosconfig."
+          else
+            printf '%s\n' "${insecure_output}" >&2
+            log_warn "Insecure apply failed for ${ip}; retrying with talosconfig."
+          fi
+          talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
+        elif [[ -n "${insecure_output}" ]]; then
+          printf '%s\n' "${insecure_output}"
+        fi
+      else
         talosctl --talosconfig "${talosconfig_path}" --nodes "${ip}" --endpoints "${ip}" apply-config --file "${cfg}"
       fi
     fi
@@ -649,9 +959,6 @@ run_post_validation() {
 
 main() {
   local cluster_patches_dir=""
-  local global_patches_enabled_default=""
-  local global_patches_legacy_default=""
-  local global_patches_available_default=""
   local global_patches_dir=""
   local cp_cfg_path=""
   local cluster_patches_default=""
@@ -691,9 +998,6 @@ main() {
   fi
   DISABLE_DEFAULT_CNI="$(normalize_bool "${DISABLE_DEFAULT_CNI}")"
 
-  global_patches_available_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/patches-available")"
-  global_patches_enabled_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/patches-enabled")"
-  global_patches_legacy_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/patches")"
   cluster_patches_default="$(resolve_repo_path "overlays/${ENV_NAME}/talos/${CLUSTER_NAME}/patches")"
 
   cp_cfg_path="$(resolve_repo_path "${TALOS_CONTROL_PLANE_CONFIG_PATH:-}")"
@@ -705,18 +1009,7 @@ main() {
     cluster_patches_dir="${cluster_patches_default}"
   fi
 
-  if [[ "${USE_GLOBAL_PATCHES}" == "true" ]]; then
-    if [[ -n "${GLOBAL_PATCHES_DIR}" ]]; then
-      global_patches_dir="$(resolve_repo_path "${GLOBAL_PATCHES_DIR}")"
-    elif [[ -d "${global_patches_enabled_default}" ]]; then
-      global_patches_dir="${global_patches_enabled_default}"
-    else
-      global_patches_dir="${global_patches_legacy_default}"
-    fi
-    [[ -d "${global_patches_dir}" ]] || log_warn "Global patches enabled, but directory not found: ${global_patches_dir}. Proceeding without global patches."
-  else
-    global_patches_dir=""
-  fi
+  global_patches_dir=""
 
   [[ -d "${cluster_patches_dir}" ]] || log_warn "Cluster patches directory not found: ${cluster_patches_dir}. Proceeding without cluster patches."
   CNI_PATCH_FILE=""
@@ -728,20 +1021,13 @@ main() {
     fi
     [[ -n "${CNI_PATCH_FILE}" ]] || die "TALOS_DISABLE_DEFAULT_CNI=true but cni.patch.yaml was not found."
   fi
+  render_bootstrap_patch "${cluster_patches_dir}"
   render_node_network_patches "${cluster_patches_dir}"
-  log_info "Rendered per-node network patches from overlay vars in: ${cluster_patches_dir}"
+  log_info "Rendered bootstrap and per-node network patches from overlay vars in: ${cluster_patches_dir}"
   if [[ "${DISABLE_DEFAULT_CNI}" == "true" ]]; then
     log_info "Default Talos CNI/kube-proxy disable: enabled (${CNI_PATCH_FILE})"
   else
     log_info "Default Talos CNI/kube-proxy disable: disabled"
-  fi
-  if [[ "${USE_GLOBAL_PATCHES}" == "true" ]]; then
-    log_info "Global patches mode: enabled"
-    log_info "Using global patches directory: ${global_patches_dir}"
-    log_info "Global patches available directory (optional): ${global_patches_available_default}"
-    log_info "Tip: keep candidates in patches-available and only activate in patches-enabled."
-  else
-    log_info "Global patches mode: disabled (enable with --enable-global-patches)"
   fi
   log_info "Using cluster patches directory: ${cluster_patches_dir}"
 
@@ -750,16 +1036,16 @@ main() {
       run_generate "${global_patches_dir}" "${cluster_patches_dir}"
       ;;
     apply)
-      run_lb_reconcile
+      if [[ "${APPLY_STAGE}" == "pre" ]]; then
+        run_lb_reconcile
+      fi
       run_apply "${global_patches_dir}" "${cluster_patches_dir}"
       ;;
     bootstrap)
-      run_lb_reconcile
       run_bootstrap
       ;;
     all)
       run_generate "${global_patches_dir}" "${cluster_patches_dir}"
-      run_lb_reconcile
       run_apply "${global_patches_dir}" "${cluster_patches_dir}"
       run_bootstrap
       ;;

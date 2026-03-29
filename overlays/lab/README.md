@@ -95,22 +95,7 @@ Dry-run:
 
 Patch model:
 
-- Global patches are optional and only applied with `--enable-global-patches`
 - Cluster patches: `overlays/lab/talos/<cluster-name>/patches`
-
-Suggested global patch layout:
-
-- `overlays/lab/talos/patches-available`: candidate patches
-- `overlays/lab/talos/patches-enabled`: active patches
-
-This allows keeping shared patches (for example `flannel.patch.yaml`) disabled
-by default and activating them only when desired.
-
-Enable a global patch example:
-
-```bash
-cp overlays/lab/talos/patches-available/flannel.patch.yaml overlays/lab/talos/patches-enabled/
-```
 
 Use them only when explicitly requested:
 
@@ -118,7 +103,6 @@ Use them only when explicitly requested:
 ./overlays/base/scripts/talos/cluster-bootstrap.sh \
   --env=lab \
   --mode=all \
-  --enable-global-patches \
   --cluster-name=talos \
   --endpoint=https://192.168.0.250:6443 \
   --generated-dir=overlays/lab/talos/talos/generated \

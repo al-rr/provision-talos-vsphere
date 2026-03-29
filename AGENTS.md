@@ -41,6 +41,19 @@
 
 - Use `shdoc` annotations on maintained shell entrypoints.
 - Use `set -euo pipefail` in maintained shell scripts.
+- Shell CLI help must follow a consistent operator format:
+  - `Usage:` line with script and primary contract
+  - `Actions:` (or `Commands:`) with one-line purpose per action
+  - `Options:` with explicit flag semantics
+  - `Examples:` with short intent comments above each example command
+  - Prefer example style similar to `kubectl -h`, where examples explain "what"
+    and "why", not only raw command syntax.
+- Maintained Bash entrypoints must include `shdoc` metadata that explains:
+  - file purpose (`@file`, `@brief`, `@description`)
+  - supported arguments/flags (`@arg`, `@flag`)
+  - practical command usage (`@example`)
+- When scripts define non-trivial helper functions, add concise inline comments
+  to explain intent and decision points.
 - Prefer canonical entrypoints in `overlays/base/scripts/`.
 - Treat root `.env` usage as legacy compatibility only, never as the primary
   configuration model.
@@ -48,7 +61,13 @@
   than operator entrypoints.
 - Wrapper entrypoints should accept `--env` (default `lab`) and resolve
   `overlays/<env>/scripts/vars.sh` automatically when `--vars-file` is not
-  explicitly provided.
+  explicitly provided, unless the module has already migrated to a
+  project-dir-first contract.
+- For Talos cluster lifecycle orchestration (`overlays/base/scripts/talos/cluster.sh`):
+  - `--project-dir` is the primary contract.
+  - `--env` is removed from this entrypoint.
+  - `--vars-file` remains available for advanced/manual use.
+  - `create-project` is the scaffold action that creates missing project files.
 - Pure compatibility wrappers that only `exec` an external script may delegate
   this behavior to that external implementation.
 - `overlays/prod/scripts/vars.sh` is the default production override file.
@@ -77,14 +96,58 @@
 - Prefer keeping reusable operational guides close to the module that provides
   the behavior.
 
+## Documentation Taxonomy
+
+- Use `README.md` as the entrypoint map, not a full runbook.
+- Use `GUIDE` documents for end-to-end flows with strict execution order and
+  decision points. A guide should answer "what to run first, second, and why".
+- Use `HOWTO` documents for focused tasks, such as "add one worker",
+  "rotate certificates", or "update addon values". A how-to should not repeat
+  full cluster lifecycle steps.
+- Use SOP (standard operating procedure) documents for repeatable operations
+  with checks and rollback notes. SOPs should state pre-checks, execution
+  commands, validation steps, and rollback path.
+- Use deployment plan documents for environment intent and values, not command
+  tutorials.
+- Keep docs user-facing and reproducible: every operational command in docs
+  should be runnable from the documented context.
+- When a script behavior changes, update the nearest owning document in the
+  same change set.
+- Avoid mixing reusable module behavior and environment-specific values in a
+  single document unless the file is explicitly an environment runbook.
+
 ## Git
 
 - Prefer Git Bash for Git operations when it works in the environment.
 - Do not version generated artifacts such as Terraform working directories,
   Talos generated outputs, or Packer artifacts.
+- Never create commits unless the user explicitly asks for a commit in the
+  current conversation turn.
+- Before any commit, confirm scope by staging only the intended files.
 
 ## Scope
 
 - Applies to the entire repository.
 - Priority folders: `overlays/base/`, `overlays/lab/`, `overlays/prod/`,
   `docs/`, and root docs.
+
+## Bash Conventions (Project)
+
+- Keep shell scripts simple and explicit; avoid abstraction without repeated
+  concrete use-cases.
+- Prefer idempotent create/update operations:
+  - create missing files
+  - do not overwrite existing user files unless explicitly requested.
+- Separate responsibilities:
+  - scaffold/create phase creates project structure and templates
+  - generate phase creates generated artifacts and dynamic render outputs
+  - apply/bootstrap phases execute lifecycle actions.
+- Always fail fast with actionable errors:
+  - include what is missing
+  - include which flag/path should be provided.
+- Resolve real script path when symlinks are supported:
+  - use `readlink -f` before deriving repository-relative paths.
+- Keep defaults in one place (`overlays/base/scripts/vars.sh`) and let project
+  or environment vars override them explicitly.
+- Prefer deterministic file paths derived from project context instead of
+  hardcoded environment paths.

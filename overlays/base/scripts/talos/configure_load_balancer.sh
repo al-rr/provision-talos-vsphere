@@ -9,7 +9,7 @@
 # @arg --cp-ips string Optional control-plane IP list override (CSV/space/JSON-like).
 # @arg --lb-hosts string Optional HAProxy host list override (CSV/space/JSON-like).
 # @arg --vars-file string Optional vars file to source after overlay vars (GOVC profile).
-# @arg --user string SSH user for HAProxy hosts. Defaults to BUILD_USERNAME or root.
+# @arg --user string SSH user for HAProxy hosts. Defaults to SSH_USER/HAPROXY_SSH_USER from vars.
 # @arg --port string SSH port for HAProxy hosts. Defaults to 22.
 # @arg --ssh-key string SSH private key used for all HAProxy hosts.
 # @arg --backend-name string HAProxy backend name. Defaults to talos_k8s_api_backend.
@@ -318,7 +318,8 @@ main() {
 
   (( ${#lb_hosts[@]} > 0 )) || die "No HAProxy hosts found. Set HAPROXY_NODE_1_IP/HAPROXY_NODE_2_IP or use --lb-hosts."
 
-  ssh_user_resolved="${SSH_USER:-${HAPROXY_SSH_USER:-${ANSIBLE_USER:-${BUILD_USERNAME:-root}}}}"
+  ssh_user_resolved="${SSH_USER:-${HAPROXY_SSH_USER:-}}"
+  [[ -n "${ssh_user_resolved}" ]] || die "SSH user not resolved. Set SSH_USER/HAPROXY_SSH_USER in vars or pass --user."
   if [[ -n "${SSH_KEY}" ]]; then
     [[ -f "${SSH_KEY}" ]] || die "SSH key not found: ${SSH_KEY}"
   fi

@@ -145,6 +145,15 @@ Remote target auto-resolution (when CLI flags are not explicitly provided):
 If no host is resolved, the wrapper exits with an error instead of silently
 falling back to local execution.
 
+Upstream transport note:
+
+- `DNS_USE_TCP_UPSTREAM=true` (or `DNSMASQ_USE_TCP_UPSTREAM=true`) makes the
+  generated dnsmasq config include `tcp-upstream`.
+- Use this when your lab blocks outbound UDP/53 but allows TCP/53.
+- Some distro builds (for example Ubuntu dnsmasq 2.90 in this lab) may not
+  support `tcp-upstream`. In that case, prefer a local resolver upstream (for
+  example `DNS_UPSTREAM_SERVERS=127.0.0.54`) and keep `DNS_USE_TCP_UPSTREAM=false`.
+
 ## Validation Status (Lab)
 
 Validated flow:
