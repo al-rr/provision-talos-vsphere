@@ -207,6 +207,10 @@ Use the document that matches your goal:
   - Use this for a Talos cluster with multiple control planes and workers.
 - [LONGHORN_GUIDE.md](docs/LONGHORN_GUIDE.md)
   - Use this for Longhorn prerequisites, install, and values update flow.
+- [CERT_MANAGER_GUIDE.md](docs/CERT_MANAGER_GUIDE.md)
+  - Use this for cert-manager install/upgrade and validation flow.
+- [PROMETHEUS_STACK_GUIDE.md](docs/PROMETHEUS_STACK_GUIDE.md)
+  - Use this for kube-prometheus-stack install/upgrade, validation, and UI access.
 - [HOWTO_ADD_WORKERS.md](docs/HOWTO_ADD_WORKERS.md)
   - Use this to scale worker nodes only on an existing cluster.
 - [HOWTO_RECREATE_CLUSTER.md](docs/HOWTO_RECREATE_CLUSTER.md)
