@@ -8,6 +8,9 @@ do modulo Talos.
 - `GETTING_STARTED.pt-br.md`
 - `CLUSTER_GUIDE.pt-br.md`
 - `ARGOCD_GITOPS_GUIDE.pt-br.md`
+- `LONGHORN_GUIDE.pt-br.md`
+- `CERT_MANAGER_GUIDE.pt-br.md`
+- `PROMETHEUS_STACK_GUIDE.pt-br.md`
 
 ## Observacoes
 
