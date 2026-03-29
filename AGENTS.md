@@ -2,12 +2,15 @@
 
 ## Language Policy (Mandatory)
 
-- All comments, log messages, documentation, inline notes, and examples must be
-  written in English.
-- Do not add Portuguese or any other non-English language text to scripts,
-  templates, variable files, or docs.
-- If a file contains mixed language content, new edits must normalize that
-  content to English.
+- Scripts, code comments, log messages, variable names, function names, and CLI
+  help text must be written in English.
+- Technical documentation intended for operators must be maintained in two
+  languages:
+  - English (`docs/en/`)
+  - Portuguese Brazil (`docs/pt-br/`)
+- Do not mix both languages in the same document file.
+- When creating or updating an operator-facing guide, keep both language
+  versions aligned in the same change scope whenever possible.
 
 ## Source Of Truth
 

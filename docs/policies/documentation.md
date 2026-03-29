@@ -11,6 +11,19 @@
 - `overlays/base` is the canonical automation layer for shared workflows.
 - Overlay-specific README files document only their own supported workflow and constraints.
 
+## Language Model
+- Operator-facing documentation must exist in:
+  - `docs/en/` (English)
+  - `docs/pt-br/` (Portuguese Brazil)
+- Keep one language per file (no mixed-language documents).
+- Script internals remain English-only:
+  - comments
+  - help text
+  - examples in script headers
+  - log messages and error messages
+- Repository-level standards and policies may stay English-first, but user
+  runbooks and operational guides should be available in both languages.
+
 ## When To Update Docs
 - Update `README.md` when the active entrypoint, path layout, or architecture changes.
 - Update `agenda.md` when a phase starts, completes, or changes scope.
