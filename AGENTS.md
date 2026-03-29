@@ -121,6 +121,9 @@
 - Prefer Git Bash for Git operations when it works in the environment.
 - Do not version generated artifacts such as Terraform working directories,
   Talos generated outputs, or Packer artifacts.
+- Never create commits unless the user explicitly asks for a commit in the
+  current conversation turn.
+- Before any commit, confirm scope by staging only the intended files.
 
 ## Scope
 
