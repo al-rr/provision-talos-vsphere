@@ -11,6 +11,7 @@ Vagrant.configure("2") do |config|
   REPO_ROOT       = File.expand_path("../..", VAGRANTFILE_DIR)
   INFRA_GITOPS    = File.expand_path("../../../infra-gitops", VAGRANTFILE_DIR)
   TALOS_VSPHERE_GITOPS = File.expand_path("../../../talos-vsphere-gitops", VAGRANTFILE_DIR)
+  TALOS_TOOLCHAIN = File.expand_path("../../../talos-toolchain", VAGRANTFILE_DIR)
   WORKDIR = "/home/vagrant/talos-vsphere-lab"
   CONTROLLER_ANSIBLE_USER = "vagrant"
   CONTROLLER_ANSIBLE_HOME = "/home/#{CONTROLLER_ANSIBLE_USER}"
@@ -93,6 +94,11 @@ Vagrant.configure("2") do |config|
     controller.vm.synced_folder TALOS_VSPHERE_GITOPS,
                            "/home/vagrant/talos-vsphere-gitops",
                            group: "vagrant", owner: "vagrant"
+    if File.directory?(TALOS_TOOLCHAIN)
+      controller.vm.synced_folder TALOS_TOOLCHAIN,
+                             "/home/vagrant/talos-toolchain",
+                             group: "vagrant", owner: "vagrant"
+    end
     configure_provider.call(controller, ip_addr)
 
     controller_env = {
