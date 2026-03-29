@@ -117,6 +117,22 @@ Recommended `cluster.sh` execution order:
 - `--vars-file` remains available for manual/advanced flows.
 - `--env` is removed from `cluster.sh`.
 
+Day-1 action mapping contract in project vars:
+
+- `TALOS_DAY1_GENERATE_CMD`
+- `TALOS_DAY1_PROVISION_CMD`
+- `TALOS_DAY1_PREPARE_BOOTSTRAP_CMD`
+- `TALOS_DAY1_APPLY_CONFIG_CMD`
+- `TALOS_DAY1_BOOTSTRAP_CMD`
+- `TALOS_DAY1_SYNC_ACCESS_CMD`
+
+`cluster.sh` executes these mappings directly for Talos lifecycle actions
+(`generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`,
+`sync-access`). If a mapping is missing, execution fails explicitly.
+
+`apply-post-bootstrap` remains a separate action and is not part of the mapped
+Talos lifecycle command set.
+
 Example:
 
 ```bash

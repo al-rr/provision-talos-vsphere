@@ -125,6 +125,23 @@ Ordem recomendada de execucao do `cluster.sh`:
 - `--vars-file` continua disponivel para fluxos manuais/avancados.
 - `--env` foi removido do `cluster.sh`.
 
+Contrato de mapeamento das actions day-1 nas vars do projeto:
+
+- `TALOS_DAY1_GENERATE_CMD`
+- `TALOS_DAY1_PROVISION_CMD`
+- `TALOS_DAY1_PREPARE_BOOTSTRAP_CMD`
+- `TALOS_DAY1_APPLY_CONFIG_CMD`
+- `TALOS_DAY1_BOOTSTRAP_CMD`
+- `TALOS_DAY1_SYNC_ACCESS_CMD`
+
+O `cluster.sh` executa esses mapeamentos diretamente para as actions do ciclo
+de vida Talos (`generate`, `provision`, `prepare-bootstrap`, `apply-config`,
+`bootstrap`, `sync-access`). Se algum mapeamento estiver ausente, a execucao
+falha de forma explicita.
+
+`apply-post-bootstrap` permanece como action separada e nao faz parte do
+conjunto mapeado do ciclo de vida Talos.
+
 Exemplo:
 
 ```bash

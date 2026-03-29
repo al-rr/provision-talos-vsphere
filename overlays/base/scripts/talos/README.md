@@ -87,6 +87,20 @@ Supported actions:
 - `sync-access`
 - `refresh-schematics`
 
+Day-1 mapped command contract:
+
+- `generate` -> `TALOS_DAY1_GENERATE_CMD`
+- `provision` -> `TALOS_DAY1_PROVISION_CMD`
+- `prepare-bootstrap` -> `TALOS_DAY1_PREPARE_BOOTSTRAP_CMD`
+- `apply-config` -> `TALOS_DAY1_APPLY_CONFIG_CMD`
+- `bootstrap` -> `TALOS_DAY1_BOOTSTRAP_CMD`
+- `sync-access` -> `TALOS_DAY1_SYNC_ACCESS_CMD`
+
+Those variables are created by `create-project` in each project `vars.sh`.
+`cluster.sh` executes these mappings directly (no internal fallback path for
+those actions). If a mapping is missing/empty, execution fails with a clear
+error.
+
 Recommended execution order:
 
 0. `create-project`
@@ -147,6 +161,8 @@ Important:
 - Preferred mode is `--project-dir=<path>`.
 - `--vars-file=<path>` remains available for advanced/manual flows.
 - `--env` is removed from `cluster.sh`; use `--project-dir` instead.
+- `apply-post-bootstrap` is still a first-class day-1 action and remains
+  separate from the mapped Talos lifecycle actions above.
 
 ## Optional Global Command
 
