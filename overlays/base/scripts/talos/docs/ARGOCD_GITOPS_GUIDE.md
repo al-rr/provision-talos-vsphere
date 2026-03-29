@@ -90,12 +90,27 @@ KUBECONFIG=/home/vagrant/.kube/config \
 kubectl apply -f /tmp/repo-secret.yaml
 ```
 
-Then apply the app-of-apps manifest:
+Deploy the app-of-apps manifest using the day-2 entrypoint:
+
+```bash
+./overlays/base/scripts/talos/talos-gitops.sh deploy-argocd-root-app \
+  --kube-context=admin@talos-dev \
+  --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+```
+
+Equivalent manual command (same effect as the action above):
 
 ```bash
 KUBECONFIG=/home/vagrant/.kube/config \
 kubectl apply -f /home/vagrant/talos-vsphere-gitops/environments/lab/argocd/root-app.yaml
 ```
+
+Behavior note:
+
+- `deploy-argocd-root-app` applies `root-app.yaml` and exits.
+- Child `Application` resources are created later by Argo CD reconciliation.
+- If Argo CD cannot compare/sync (for example cache/API connectivity issues),
+  only `addons-root` may exist and child apps will not be created yet.
 
 ## How The Applications Read Values
 
@@ -120,6 +135,20 @@ This allows values to stay in:
 ```bash
 KUBECONFIG=/home/vagrant/.kube/config kubectl -n argocd get applications
 KUBECONFIG=/home/vagrant/.kube/config kubectl -n argocd get pods
+KUBECONFIG=/home/vagrant/.kube/config kubectl -n argocd describe application addons-root
+```
+
+Expected:
+
+- `addons-root` exists.
+- Child apps (for example `cilium`, `longhorn`, `cert-manager`,
+  `prometheus-stack`) appear in `kubectl -n argocd get applications` after
+  reconciliation.
+
+If child apps do not appear:
+
+```bash
+KUBECONFIG=/home/vagrant/.kube/config kubectl -n argocd logs statefulset/argocd-application-controller --tail=200
 ```
 
 ## UI Access (Port-Forward Model)
