@@ -8,6 +8,24 @@ repositorio.
 Este guia e propositalmente explicito sobre ordem de execucao e escopo dos
 scripts.
 
+## Entrypoints De Execucao (Transicao)
+
+Recomendacao atual durante a migracao para toolchain:
+
+- Day-1: usar `cluster-toolchain.sh`
+- Day-2: usar `talos-gitops-toolchain.sh`
+
+Esses wrappers delegam para scripts externos do `talos-toolchain` e mantem este
+repositorio como camada de integracao.
+
+Exemplos:
+
+```bash
+./overlays/base/scripts/talos/cluster-toolchain.sh create-project --project-dir=overlays/lab/talos/talos-dev
+./overlays/base/scripts/talos/cluster-toolchain.sh generate --project-dir=overlays/lab/talos/talos-dev
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+```
+
 ## Escopo E Fonte De Verdade
 
 Use este guia junto com:
