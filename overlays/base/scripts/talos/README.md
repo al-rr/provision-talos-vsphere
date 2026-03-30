@@ -12,12 +12,38 @@ documented in the guides linked below.
 `install.sh` is a compatibility wrapper and delegates to
 `infra-gitops/scripts/talos/install.sh`.
 
+## Toolchain Transition Wrappers
+
+For migration tests, this module provides wrappers that forward to an external
+`talos-toolchain` checkout:
+
+- `cluster-toolchain.sh` -> `<toolchain>/scripts/talos/cluster.sh`
+- `talos-gitops-toolchain.sh` -> `<toolchain>/scripts/talos/talos-gitops.sh`
+
+Default toolchain location:
+
+- `/home/vagrant/talos-toolchain`
+
+Override with:
+
+- env var `TALOS_TOOLCHAIN_DIR`
+- or `--toolchain-dir=<path>`
+
+Examples:
+
+```bash
+./overlays/base/scripts/talos/cluster-toolchain.sh create-project --project-dir=overlays/lab/talos/talos-dev
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+```
+
 ## Scripts In This Module
 
 | Script                                     | Purpose                                                  | Notes                                                                         |
 | ------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `cluster.sh`                               | Unified day-1 cluster lifecycle entrypoint               | Actions: `create-project`, `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`, `apply-post-bootstrap`, `sync-access`, `refresh-schematics` |
 | `talos-gitops.sh`                          | Unified day-2 GitOps operations entrypoint               | Installs platform helms, deploys Argo CD root app, configures cluster tools   |
+| `cluster-toolchain.sh`                     | Delegate day-1 actions to external `talos-toolchain`     | Transition wrapper for migration testing                                       |
+| `talos-gitops-toolchain.sh`                | Delegate day-2 actions to external `talos-toolchain`     | Transition wrapper for migration testing                                       |
 | `install.sh`                               | Install or upgrade `talosctl`                            | Local or remote execution                                                     |
 | `provision-single-node.sh`                 | Provision a non-HA Talos node                            | Thin wrapper over `overlays/base/scripts/talos/govc/provision-single-node.sh` |
 | `provision-cluster.sh`                     | Provision a Talos cluster topology                       | Thin wrapper over `overlays/base/scripts/talos/govc/provision-cluster.sh`     |
