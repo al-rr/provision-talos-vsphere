@@ -10,7 +10,7 @@
 # @arg --toolchain-dir path Optional talos-toolchain repository dir override.
 # @flag --help,-h Show usage information.
 # @example
-#   ./talos-gitops-toolchain.sh install-platform-helm --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+#   ./talos-gitops-toolchain.sh install-platform-helm --kube-context=admin@talos-dev --manifest-root-dir=./manifests
 set -euo pipefail
 
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -52,4 +52,3 @@ TARGET_SCRIPT="${TOOLCHAIN_DIR}/scripts/talos/talos-gitops.sh"
 }
 
 exec "${TARGET_SCRIPT}" "${ARGS[@]}"
-
