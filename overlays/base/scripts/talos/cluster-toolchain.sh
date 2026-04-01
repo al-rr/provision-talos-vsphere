@@ -21,6 +21,73 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
 TOOLCHAIN_DIR="${TALOS_TOOLCHAIN_DIR:-/home/vagrant/talos-toolchain}"
 
+upsert_export_var() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  local escaped_value=""
+  local tmp_file=""
+
+  escaped_value="${value//\\/\\\\}"
+  escaped_value="${escaped_value//\"/\\\"}"
+  tmp_file="$(mktemp)"
+
+  if grep -qE "^export ${key}=" "${file}"; then
+    awk -v k="${key}" -v v="${escaped_value}" '
+      BEGIN { done=0 }
+      $0 ~ "^export " k "=" {
+        print "export " k "=\"" v "\""
+        done=1
+        next
+      }
+      { print }
+      END {
+        if (!done) print "export " k "=\"" v "\""
+      }
+    ' "${file}" > "${tmp_file}"
+  else
+    cat "${file}" > "${tmp_file}"
+    printf '\nexport %s="%s"\n' "${key}" "${escaped_value}" >> "${tmp_file}"
+  fi
+
+  mv "${tmp_file}" "${file}"
+}
+
+patch_project_vars_for_lab_defaults() {
+  local project_dir="$1"
+  local project_abs=""
+  local vars_file=""
+
+  if [[ "${project_dir}" = /* ]]; then
+    project_abs="${project_dir}"
+  else
+    project_abs="${REPO_ROOT}/${project_dir}"
+  fi
+
+  vars_file="${project_abs}/vars.sh"
+  [[ -f "${vars_file}" ]] || return 0
+
+  upsert_export_var "${vars_file}" "VSPHERE_ENDPOINT" "192.168.0.233"
+  upsert_export_var "${vars_file}" "VSPHERE_USERNAME" "root"
+  upsert_export_var "${vars_file}" "VSPHERE_PASSWORD" "CHANGE_ME"
+  upsert_export_var "${vars_file}" "VSPHERE_INSECURE_CONNECTION" "true"
+  upsert_export_var "${vars_file}" "VSPHERE_DATASTORE" "DATASTORE_02"
+  upsert_export_var "${vars_file}" "VSPHERE_NETWORK" "VM Network"
+  upsert_export_var "${vars_file}" "VSPHERE_FOLDER" ""
+  upsert_export_var "${vars_file}" "VSPHERE_RESOURCE_POOL" ""
+  upsert_export_var "${vars_file}" "SSH_USER" "vagrant"
+  upsert_export_var "${vars_file}" "HAPROXY_SSH_USER" "vagrant"
+  upsert_export_var "${vars_file}" "HAPROXY_NODE_1_NAME" "talos-lb-1"
+  upsert_export_var "${vars_file}" "HAPROXY_NODE_1_IP" "192.168.0.31"
+  upsert_export_var "${vars_file}" "HAPROXY_NODE_2_NAME" "talos-lb-2"
+  upsert_export_var "${vars_file}" "HAPROXY_NODE_2_IP" "192.168.0.32"
+  upsert_export_var "${vars_file}" "TALOS_LOAD_BALANCER_RECONCILE_SCRIPT" "${REPO_ROOT}/overlays/base/scripts/ha-proxy/setup.sh"
+  upsert_export_var "${vars_file}" "TALOS_DNS_SYNC_REQUIRED" "true"
+  upsert_export_var "${vars_file}" "TALOS_DNS_REGISTER_SCRIPT" "${REPO_ROOT}/overlays/base/scripts/dns/register-hosts.sh"
+  upsert_export_var "${vars_file}" "TALOS_DNS_UNREGISTER_SCRIPT" "${REPO_ROOT}/overlays/base/scripts/dns/unregister-hosts.sh"
+  upsert_export_var "${vars_file}" "TALOS_POST_BOOTSTRAP_HELM_SOURCE_PATH" "/home/vagrant/talos-vsphere-gitops/environments/lab/helm"
+}
+
 usage() {
   cat <<'EOF_USAGE'
 Usage: cluster-toolchain.sh [--toolchain-dir=<path>] <action> [options]
@@ -35,11 +102,22 @@ EOF_USAGE
 }
 
 ARGS=()
+ACTION=""
+PROJECT_DIR_ARG=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --toolchain-dir=*) TOOLCHAIN_DIR="${1#*=}"; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) ARGS+=("$1"); shift ;;
+    *)
+      if [[ -z "${ACTION}" ]]; then
+        ACTION="$1"
+      fi
+      if [[ "$1" == --project-dir=* ]]; then
+        PROJECT_DIR_ARG="${1#*=}"
+      fi
+      ARGS+=("$1")
+      shift
+      ;;
   esac
 done
 
@@ -53,5 +131,8 @@ TARGET_SCRIPT="${TOOLCHAIN_DIR}/scripts/talos/cluster.sh"
   exit 1
 }
 
-exec "${TARGET_SCRIPT}" "${ARGS[@]}"
+"${TARGET_SCRIPT}" "${ARGS[@]}"
 
+if [[ "${ACTION}" == "create-project" && -n "${PROJECT_DIR_ARG}" ]]; then
+  patch_project_vars_for_lab_defaults "${PROJECT_DIR_ARG}"
+fi
