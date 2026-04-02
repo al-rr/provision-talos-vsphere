@@ -30,21 +30,69 @@ Default builder is `vsphere-iso`. You can still set it explicitly with
 
 ## Environment Setup
 
-Optional local overrides:
+Create local overrides:
 
 ```bash
-cp packer/env.local.example packer/env.local.sh
+cp packer/vars.local.example.sh packer/vars.local.sh
 ```
 
-Load overlay vars into the shell:
+Export module vars and PKR_VAR_*:
 
 ```bash
-OVERLAY_ENV=lab source ./packer/env.sh
+source ./packer/export-pkr-vars.sh
 ```
 
 This exports:
 - `GOVC_*` for `govc`
 - `PKR_VAR_*` for Packer
+
+## What `init` Does
+
+`init` runs `packer init` for the selected template directory only.
+
+Use it when:
+- you changed plugins or plugin constraints
+- this is the first run in a fresh checkout
+- you want to validate plugin setup before `validate` or `build`
+
+Example:
+
+```bash
+./packer/build.sh --os=ubuntu --version=24 --action=init
+```
+
+## Variable Contract
+
+The module values are loaded in this order:
+
+1. `packer/vars.sh`
+2. `packer/vars.local.sh` (optional)
+3. runtime CLI overrides (`--vars-file`, `--vsphere-*`, `--build-*`)
+
+The template values are split into two groups:
+
+1. Profile-local defaults (`*.auto.pkrvars.hcl`)
+- OS-specific and mostly stable values (iso file name/path, disk defaults, boot command defaults).
+- Example files:
+  - `packer/vsphere-iso/ubuntu/24-04-lts/ubuntu.auto.pkrvars.hcl`
+  - `packer/vsphere-iso/oraclelinux/ol9/oraclelinux.auto.pkrvars.hcl`
+
+2. Environment/runtime values (`PKR_VAR_*` from `export-pkr-vars.sh`)
+- vSphere endpoint and credentials
+- datacenter/cluster/host/datastore/network/folder/resource pool
+- build account/key and common toggles (`common_*`)
+
+Required runtime variables are validated by `packer/vsphere-iso/build.sh`:
+- `VSPHERE_ENDPOINT`
+- `VSPHERE_USERNAME`
+- `VSPHERE_PASSWORD`
+- `BUILD_USERNAME`
+- `BUILD_PASSWORD`
+
+Override options without changing local vars:
+- `--vars-file=/path/custom.pkrvars.hcl`
+- `--vsphere-env-file=/path/vsphere.env` (when running `vsphere-iso/build.sh` directly)
+- direct CLI overrides such as `--vsphere-username`, `--vsphere-password` (direct `vsphere-iso/build.sh`)
 
 ## Examples
 
@@ -68,8 +116,28 @@ Build Oracle Linux 9 (default builder):
 - Planned:
   - `oraclelinux/8`
 
+## Notes
+
+- `packerio` is preferred when available; fallback is `packer`.
+- For `build`, the flow executes `init` and `validate` before `packer build`.
+- Build artifacts and manifests are created under profile directories inside
+  `packer/vsphere-iso/...`.
+- `BUILD_KEY` can be auto-loaded from `~/.ssh/id_ed25519.pub` or
+  `~/.ssh/id_rsa.pub` when empty.
+
+## ESXi Standalone Limitation
+
+In standalone ESXi (without vCenter), native template conversion can fail with:
+
+`The operation is not supported on the object`
+
+When this happens:
+- keep template conversion disabled (`COMMON_TEMPLATE_CONVERSION=false`)
+- prefer OVF export/import flow when needed
+- or keep the powered-off VM as a golden source for cloning
+
 ## Security Notes
 
 - Never commit secrets in `.env`, `.pkrvars.hcl`, or scripts.
-- Keep `packer/env.local.sh` local only.
+- Keep `packer/vars.local.sh` local only.
 - Rotate temporary credentials used during image builds.

@@ -2,13 +2,12 @@
 # @file build.sh
 # @brief Orchestrator for Packer vSphere-ISO builds.
 # @description
-#   Loads overlay vars, exports PKR_VAR_* automatically, supports temporary
-#   credential overrides via CLI/env, and runs init/validate/build for the
-#   selected profile.
+#   Loads module vars contract, exports PKR_VAR_* automatically, supports
+#   temporary credential overrides via CLI/env, and runs init/validate/build
+#   for the selected profile.
 #
 # @arg --profile string Profile name. Supported: oraclelinux-9, ubuntu-24.
 # @arg --action string Action: init, validate, or build. Defaults to validate.
-# @arg --env,-e string Overlay environment. Defaults to lab.
 # @arg --vars-file string Additional .pkrvars.hcl file (repeatable, relative to cwd or profile dir).
 # @arg --vsphere-env-file string Optional env file with vsphere_* keys.
 # @arg --packer-bin string Packer binary override (default: packerio, then packer).
@@ -21,15 +20,14 @@
 # @flag --help,-h Show usage.
 #
 # @example
-#   VSPHERE_PASSWORD='CHANGE_ME' ./packer/vsphere-iso/build.sh --env=lab --vsphere-username=root --action=validate
+#   VSPHERE_PASSWORD='CHANGE_ME' ./packer/vsphere-iso/build.sh --vsphere-username=root --action=validate
 # @example
-#   ./packer/vsphere-iso/build.sh --env=lab --action=build --vars-file=/tmp/custom.pkrvars.hcl
+#   ./packer/vsphere-iso/build.sh --action=build --vars-file=/tmp/custom.pkrvars.hcl
 
 set -euo pipefail
 
 PROFILE="oraclelinux-9"
 ACTION="validate"
-ENV_NAME="lab"
 PACKER_BIN="${PACKER_BIN:-}"
 DRY_RUN="false"
 VSPHERE_ENV_FILE="${VSPHERE_ENV_FILE:-}"
@@ -50,7 +48,20 @@ PACKER_DEFAULT_VAR_FILES=()
 RESOLVED_PACKER_BIN=""
 
 # shellcheck disable=SC1091
-source "${REPO_ROOT}/overlays/base/scripts/functions.sh"
+source "${REPO_ROOT}/packer/lib/pkr-vars.sh"
+
+log_info() {
+  echo "[INFO] $*"
+}
+
+log_warn() {
+  echo "[WARN] $*" >&2
+}
+
+die() {
+  echo "[ERROR] $*" >&2
+  exit 1
+}
 
 usage() {
   cat <<EOF
@@ -59,7 +70,6 @@ Usage: $(basename "$0") [options]
 Options:
       --profile=<name>          oraclelinux-9 (default) | ubuntu-24
       --action=<name>           init | validate | build (default: validate)
-  -e, --env=<name>              Overlay environment (default: lab)
       --vars-file=<path>        Additional var file (repeatable; cwd or profile dir)
       --vsphere-env-file=<path> Optional env file with vsphere_* values
       --packer-bin=<name>       Packer binary override
@@ -82,15 +92,6 @@ parse_args() {
         ;;
       --action=*)
         ACTION="${1#*=}"
-        shift
-        ;;
-      -e|--env)
-        [[ $# -ge 2 ]] || die "Missing value for $1"
-        ENV_NAME="$2"
-        shift 2
-        ;;
-      --env=*)
-        ENV_NAME="${1#*=}"
         shift
         ;;
       --vars-file=*)
@@ -158,9 +159,6 @@ resolve_profile() {
         "ubuntu.auto.pkrvars.hcl"
         "linux-storage.auto.pkrvars.hcl"
       )
-      if [[ "${ENV_NAME}" == "lab" ]]; then
-        PACKER_DEFAULT_VAR_FILES+=("ubuntu.lab.ovf.pkrvars.hcl")
-      fi
       ;;
     *)
       die "Unsupported --profile '${PROFILE}'. Supported: oraclelinux-9, ubuntu-24."
@@ -432,16 +430,17 @@ main() {
   resolve_packer_bin
   validate_inputs
 
-  load_overlay_vars "${ENV_NAME}"
+  PKR_EXPORT_SILENT="true"
+  pkr_load_module_vars
   load_vsphere_env_file
   apply_overrides
   validate_runtime_vars
   ensure_build_password_encrypted
   ensure_build_key
-  export_packer_vars
+  pkr_export_vars
   sanitize_pkr_env
 
-  log_info "profile=${PROFILE} action=${ACTION} env=${ENV_NAME} packer=${RESOLVED_PACKER_BIN}"
+  log_info "profile=${PROFILE} action=${ACTION} packer=${RESOLVED_PACKER_BIN}"
   log_info "endpoint=${VSPHERE_ENDPOINT} user=${VSPHERE_USERNAME:-<unset>}"
   log_info "template=${PACKER_WORK_DIR}/${PACKER_TEMPLATE}"
 

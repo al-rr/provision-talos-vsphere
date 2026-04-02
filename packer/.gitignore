@@ -1,6 +1,6 @@
 .packer.d/
 .env
-env.local.sh
+vars.local.sh
 **/packer_cache/
 **/*.lock
 .vsphere-iso.bad.*/

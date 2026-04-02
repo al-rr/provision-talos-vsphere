@@ -11,6 +11,12 @@
 # @arg --version string Target OS version selector (for example: 24, 9, 8).
 # @arg --action string Action: init|validate|build. Defaults to validate.
 # @arg --vars-file string Extra var file (repeatable).
+# @arg --vsphere-env-file string Optional env file with vsphere_* keys.
+# @arg --vsphere-endpoint string Temporary vSphere endpoint override.
+# @arg --vsphere-username string Temporary vSphere username override.
+# @arg --vsphere-password string Temporary vSphere password override.
+# @arg --build-username string Temporary guest build username override.
+# @arg --build-password string Temporary guest build password override.
 # @arg --packer-bin string Optional packer binary override.
 # @flag --dry-run Print commands without executing.
 # @flag --help,-h Show usage.
@@ -19,6 +25,8 @@
 #   ./packer/build.sh --builder=vsphere-iso --os=ubuntu --version=24 --action=validate
 # @example
 #   ./packer/build.sh --os=oraclelinux --version=9 --action=build
+# @example
+#   ./packer/build.sh --os=ubuntu --version=24 --action=init
 
 set -euo pipefail
 
@@ -30,6 +38,7 @@ ACTION="validate"
 PACKER_BIN="${PACKER_BIN:-}"
 DRY_RUN="false"
 EXTRA_VAR_FILES=()
+FORWARD_ARGS=()
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VSPHERE_ENTRYPOINT="${SCRIPT_DIR}/vsphere-iso/build.sh"
@@ -48,11 +57,20 @@ Options:
   --version=<value>     OS version selector (example: 24, 9, 8)
   --action=<name>       init | validate | build (default: validate)
   --vars-file=<path>    Extra var file (repeatable)
+  --vsphere-env-file    Optional env file with vsphere_* keys
+  --vsphere-endpoint    Temporary vSphere endpoint override
+  --vsphere-username    Temporary vSphere username override
+  --vsphere-password    Temporary vSphere password override
+  --build-username      Temporary guest build username override
+  --build-password      Temporary guest build password override
   --packer-bin=<name>   Optional packer binary override
   --dry-run             Print commands without executing
   -h, --help            Show this help
 
 Examples:
+  # Initialize plugins/modules for Ubuntu 24 template
+  ./packer/build.sh --os=ubuntu --version=24 --action=init
+
   # Validate Ubuntu 24 using vsphere-iso
   ./packer/build.sh --builder=vsphere-iso --os=ubuntu --version=24 --action=validate
 
@@ -86,6 +104,10 @@ parse_args() {
         ;;
       --vars-file=*)
         EXTRA_VAR_FILES+=("${1#*=}")
+        shift
+        ;;
+      --vsphere-env-file=*|--vsphere-endpoint=*|--vsphere-username=*|--vsphere-password=*|--build-username=*|--build-password=*)
+        FORWARD_ARGS+=("${1}")
         shift
         ;;
       --packer-bin=*)
@@ -153,6 +175,7 @@ run_vsphere_iso() {
   for vf in "${EXTRA_VAR_FILES[@]}"; do
     cmd+=("--vars-file=${vf}")
   done
+  cmd+=("${FORWARD_ARGS[@]}")
   [[ -n "${PACKER_BIN}" ]] && cmd+=("--packer-bin=${PACKER_BIN}")
   [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
   exec "${cmd[@]}"
