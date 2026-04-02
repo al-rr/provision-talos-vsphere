@@ -1,1 +1,7 @@
 .packer.d/
+.env
+env.local.sh
+**/packer_cache/
+**/*.lock
+vsphere-iso/oraclelinux/.ol9.recover.*/
+vsphere-iso/ubuntu/.24-04-lts.recover.*/

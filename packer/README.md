@@ -1,119 +1,71 @@
-# Packer Guide
+# Packer Module
 
-Este diretório concentra os fluxos de build de imagens para laboratório.
+This directory is the image-building module used by lab and platform workflows.
 
-## Objetivo
+## Canonical Entrypoint
 
-- `vmware-iso`: build local (Workstation/Fusion).
-- `vsphere-iso`: build direto no ESXi/vSphere.
-
-## Pré-requisitos
-
-1. `packer` ou `packerio` no PATH.
-2. `govc` no PATH para validações de inventário.
-3. Acesso de rede ao ESXi/vSphere.
-4. Para `common_data_source=disk`, ter `xorriso` instalado no host de build.
-
-Instalar `govc` pelo script do repositório:
+Use a single dispatcher:
 
 ```bash
-cd /home/vagrant/infra-gitops
-./scripts/govc/install.sh
+./packer/build.sh
 ```
 
-## Passo Importante: Preparar Ambiente (source)
+Supported targets:
+- `vsphere-iso`: build directly on ESXi/vSphere.
+- `vmware-iso`: local VMware-based builds.
 
-Este é o passo obrigatório antes de executar os builds.
+## Prerequisites
 
-1. (Opcional) crie um arquivo local com overrides e segredos:
+1. `packer` or `packerio` in `PATH`.
+2. `govc` in `PATH` for vSphere inventory checks.
+3. Network access to ESXi/vSphere when using `vsphere-iso`.
+
+## Environment Setup
+
+Optional local overrides:
 
 ```bash
 cp packer/env.local.example packer/env.local.sh
 ```
 
-2. Carregue variáveis do overlay atual na sessão:
+Load overlay vars into the shell:
 
 ```bash
 OVERLAY_ENV=lab source ./packer/env.sh
 ```
 
-Isso exporta:
-- `GOVC_*` (para `govc`)
-- `PKR_VAR_*` (para Packer)
+This exports:
+- `GOVC_*` for `govc`
+- `PKR_VAR_*` for Packer
 
-3. Garanta uma chave pública para acesso SSH na imagem:
+## Examples
 
-```bash
-export BUILD_KEY="$(cat ~/.ssh/id_ed25519.pub)"
-```
-
-Se `BUILD_KEY` não for definido, `packer/vsphere-iso/build.sh` tenta carregar automaticamente `~/.ssh/id_ed25519.pub` e depois `~/.ssh/id_rsa.pub`.
-
-## Validar Conectividade
+Validate Ubuntu profile in vSphere mode:
 
 ```bash
-govc about
-govc ls /
-govc datastore.info DATASTORE_02
+./packer/build.sh --target=vsphere-iso --profile=ubuntu-24 --env=lab --action=validate
 ```
 
-## Fluxo vsphere-iso (recomendado para lab)
-
-Perfis suportados pelo orchestrator:
-- `oraclelinux-9`
-- `ubuntu-24`
-
-### Oracle Linux 9
+Build Oracle Linux profile in vSphere mode:
 
 ```bash
-./packer/vsphere-iso/build.sh \
-  --profile=oraclelinux-9 \
-  --env=lab \
-  --vsphere-username=root \
-  --vsphere-password='CHANGE_ME' \
-  --build-username=vagrant \
-  --build-password=vagrant \
-  --action=build
+./packer/build.sh --target=vsphere-iso --profile=oraclelinux-9 --env=lab --action=build
 ```
 
-### Ubuntu 24.04 LTS
+Validate all local VMware profiles:
 
 ```bash
-./packer/vsphere-iso/build.sh \
-  --profile=ubuntu-24 \
-  --env=lab \
-  --vsphere-username=root \
-  --vsphere-password='CHANGE_ME' \
-  --build-username=vagrant \
-  --build-password=vagrant \
-  --action=build
+./packer/build.sh --target=vmware-iso --os=all --action=validate
 ```
 
-## Importante: ESXi standalone x Template
-
-Em ESXi standalone (sem vCenter), `convert_to_template` pode falhar com:
-
-`The operation is not supported on the object`
-
-Nesse cenário, use a saída do perfil Ubuntu do lab com OVF export habilitado e importe com `govc import.ovf`.
-Se você estiver em vCenter, ainda pode usar uma **VM golden** desligada como origem de clone (`govc vm.clone -vm <origem>`), em vez de template nativo.
-
-## Fluxo vmware-iso (build local)
-
-Validar todos os perfis:
+Build only local Ubuntu profile:
 
 ```bash
-./packer/vmware-iso/build.sh --os=all --action=validate
+./packer/build.sh --target=vmware-iso --os=ubuntu --action=build
 ```
 
-Build Oracle Linux:
+## Security Notes
 
-```bash
-./packer/vmware-iso/build.sh --os=oraclelinux --action=build
-```
-
-## Observações de Segurança
-
-- Não comite segredos em `*.pkrvars.hcl`, `.env` ou scripts.
-- Use `packer/env.local.sh` apenas localmente (está no `.gitignore`).
-- Prefira senha via variável de ambiente/sessão e rotacione após testes.
+- Never commit secrets in `.env`, `.pkrvars.hcl`, or scripts.
+- Keep `packer/env.local.sh` local only.
+- Rotate temporary credentials used during image builds.
