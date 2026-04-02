@@ -27,6 +27,7 @@
 # @arg --talos-version version Talos version for schematic image tags.
 # @arg --cp-schematic-file path Control-plane schematic file path.
 # @arg --worker-schematic-file path Worker schematic file path.
+# @flag --force-generate Force regeneration of Talos config files.
 # @flag --no-update-ova Do not rewrite TALOS_OVA_PATH on refresh-schematics.
 # @flag --dry-run,-n Print actions without executing.
 # @flag --help,-h Show usage information.
@@ -63,6 +64,7 @@ TALOS_VERSION=""
 CP_SCHEMATIC_FILE=""
 WORKER_SCHEMATIC_FILE=""
 UPDATE_OVA_FROM_SCHEMATIC="true"
+FORCE_GENERATE="false"
 DRY_RUN="false"
 
 usage() {
@@ -92,6 +94,7 @@ Options:
   --talos-version=<version>       Talos version for image tags (example: v1.12.4)
   --cp-schematic-file=<path>      CP schematic file (default: <project>/schematic.cp.yaml)
   --worker-schematic-file=<path>  Worker schematic file (default: <project>/schematic.worker.yaml, fallback schematic.yaml)
+  --force-generate                Force regeneration of Talos config files
   --no-update-ova                 Do not rewrite TALOS_OVA_PATH during refresh-schematics
   -n, --dry-run                   Print actions without executing
   -h, --help                      Show this help
@@ -145,6 +148,7 @@ parse_args() {
       --talos-version=*) TALOS_VERSION="${1#*=}"; shift ;;
       --cp-schematic-file=*) CP_SCHEMATIC_FILE="${1#*=}"; shift ;;
       --worker-schematic-file=*) WORKER_SCHEMATIC_FILE="${1#*=}"; shift ;;
+      --force-generate) FORCE_GENERATE="true"; shift ;;
       --no-update-ova) UPDATE_OVA_FROM_SCHEMATIC="false"; shift ;;
       -n|--dry-run) DRY_RUN="true"; shift ;;
       -h|--help) usage; exit 0 ;;
@@ -681,6 +685,9 @@ build_action_extra_args() {
     generate|prepare-bootstrap|apply-config|bootstrap)
       [[ -n "${CLUSTER_NAME}" ]] && extras+=" --cluster-name=${CLUSTER_NAME}"
       [[ -n "${GENERATED_DIR}" ]] && extras+=" --generated-dir=${GENERATED_DIR}"
+      if [[ "${action}" == "generate" && "${FORCE_GENERATE}" == "true" ]]; then
+        extras+=" --force-generate"
+      fi
       [[ "${DRY_RUN}" == "true" ]] && extras+=" --dry-run"
       ;;
     provision)

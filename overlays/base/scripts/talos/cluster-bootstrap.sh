@@ -633,9 +633,6 @@ patch_for_node() {
   [[ -f "${cluster_patches_dir}/bootstrap.patch.yaml" ]] && chain+=("${cluster_patches_dir}/bootstrap.patch.yaml")
   [[ -f "${cluster_patches_dir}/${role_common_patch}" ]] && chain+=("${cluster_patches_dir}/${role_common_patch}")
   [[ -s "${cluster_patches_dir}/${role_bootstrap_patch}" ]] && chain+=("${cluster_patches_dir}/${role_bootstrap_patch}")
-  if [[ "${kind}" == "worker" ]]; then
-    [[ -f "${cluster_patches_dir}/longhorn.patch.yaml" ]] && chain+=("${cluster_patches_dir}/longhorn.patch.yaml")
-  fi
   [[ -f "${cluster_patches_dir}/dns.patch.yaml" ]] && chain+=("${cluster_patches_dir}/dns.patch.yaml")
   [[ -f "${cluster_patches_dir}/${kind}-${index}.patch.yaml" ]] && chain+=("${cluster_patches_dir}/${kind}-${index}.patch.yaml")
   if [[ "${kind}" == "controlplane" ]]; then
