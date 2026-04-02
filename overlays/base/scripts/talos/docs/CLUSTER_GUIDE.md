@@ -7,6 +7,10 @@ repository.
 
 This guide is intentionally explicit about execution order and script scope.
 
+If you want a single canonical command flow for lab day-1, use:
+
+- [LAB_DAY1_RUNBOOK.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/LAB_DAY1_RUNBOOK.md)
+
 ## Execution Entry Points (Transition)
 
 Current recommendation during toolchain migration:

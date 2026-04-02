@@ -74,6 +74,10 @@ For a new Talos cluster, the recommended order is:
 9. Configure kubeconfig and validate the cluster.
 10. Proceed with post-bootstrap components such as Cilium.
 
+For exact commands in canonical order, follow:
+
+- [LAB_DAY1_RUNBOOK.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/LAB_DAY1_RUNBOOK.md)
+
 ## Where To Go Next
 
 Choose the guide that matches your deployment:

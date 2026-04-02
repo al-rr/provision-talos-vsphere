@@ -245,6 +245,8 @@ Use the document that matches your goal:
 
 - [GETTING_STARTED.md](docs/GETTING_STARTED.md)
   - Start here if you are new to the module.
+- [LAB_DAY1_RUNBOOK.md](docs/LAB_DAY1_RUNBOOK.md)
+  - Canonical lab day-1 execution order (DNS -> LB -> Talos lifecycle).
 - [CLUSTER_GUIDE.md](docs/CLUSTER_GUIDE.md)
   - Use this for a Talos cluster with multiple control planes and workers.
 - [LONGHORN_GUIDE.md](docs/LONGHORN_GUIDE.md)

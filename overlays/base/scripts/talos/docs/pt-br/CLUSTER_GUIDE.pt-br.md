@@ -8,6 +8,10 @@ repositorio.
 Este guia e propositalmente explicito sobre ordem de execucao e escopo dos
 scripts.
 
+Se voce quiser um fluxo unico canonico de comandos para o day-1 do lab, use:
+
+- [LAB_DAY1_RUNBOOK.pt-br.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/pt-br/LAB_DAY1_RUNBOOK.pt-br.md)
+
 ## Entrypoints De Execucao (Transicao)
 
 Recomendacao atual durante a migracao para toolchain:
