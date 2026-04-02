@@ -18,12 +18,15 @@ that is not backed by real files in this repository.
 The repository is divided like this:
 
 ```text
+packer/
+  vsphere-iso/
+  vmware-iso/
+
 overlays/
   base/
     ansible/
     conf/
     govc/
-    packer/
     scripts/
     terraform/
   lab/

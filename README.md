@@ -27,7 +27,7 @@ overrides and bootstrap assets.
 - `overlays/base/conf/`: shared config inputs and reusable templates.
 - `overlays/base/scripts/`: canonical shell entrypoints and helper libraries.
 - `overlays/base/ansible/`: shared HAProxy Ansible automation.
-- `overlays/base/packer/`: shared HAProxy image build inputs.
+- `packer/vsphere-iso/`: canonical image build module for vSphere/ESXi.
 - `overlays/base/terraform/`: shared Terraform for HAProxy and Talos.
 - `overlays/base/govc/`: shared GOVC helpers, including HAProxy VM provisioning.
 - `overlays/lab/`: lab controller bootstrap assets, lab vars, and validation support.
