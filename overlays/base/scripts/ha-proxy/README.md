@@ -8,6 +8,7 @@ It provides:
 - configuration rendering and apply (`setup.sh`)
 - host hardening for HAProxy ports and sysctl (`hardening.sh`)
 - full HA orchestration (`run-full.sh`)
+- action-based load balancer wrapper (`haproxy-lb.sh`)
 
 The lifecycle scripts (`install.sh`, `setup.sh`, `hardening.sh`) are compatibility
 wrappers and delegate execution to `infra-gitops/scripts/ha-proxy/`.
@@ -40,6 +41,10 @@ Remote execution requires:
 - `hardening.sh`: applies sysctl profile and firewall rules.
 - `run-full.sh`: provisions two nodes with `govc`, then installs/configures HAProxy, applies hardening, and configures Keepalived.
   Keepalived module source is `infra-gitops/scripts/keepalived`.
+- `haproxy-lb.sh`: wrapper entrypoint for LB workflows (`validate`, `configure-vip`, `reconcile-backends`, `status`).
+  Delegates to `infra-gitops/scripts/ha-proxy/haproxy-lb.sh` for action logic.
+  `configure-vip` is lab orchestration and runs local `run-full.sh`.
+  Used as Talos day-1 reconcile hook (`TALOS_LOAD_BALANCER_RECONCILE_SCRIPT`).
 - `govc/provision.sh`: VMware-specific provisioning entrypoint for HAProxy VMs.
 - `vars.sh`: module defaults.
 - `templates/haproxy.cfg.tpl`: config template.
@@ -73,6 +78,11 @@ Override these in `overlays/<env>/scripts/vars.sh` when needed.
   - `--env`, `--vars-file`, `--count`, `--prefix`, `--mode`, `--overwrite`
   - `--skip-provision`, `--skip-haproxy`, `--skip-hardening`, `--skip-keepalived`, `--show-values`
   - `--user`, `--port`, `--ssh-key`, `--ssh-key-dir`, `--infra-gitops-root`, `--dry-run`
+- `haproxy-lb.sh` actions:
+  - `validate`: validate required scripts and resolved HAProxy vars
+  - `configure-vip`: run `run-full.sh` for LB pair/VIP setup
+  - `reconcile-backends`: delegate to infra module for backend/frontend reconciliation
+  - `status`: check service/listeners on one or more hosts over SSH
 
 ## Full Flow
 `run-full.sh` is the reusable entrypoint for the complete HAProxy HA workflow:
@@ -139,6 +149,15 @@ Run the full HA workflow in lab:
   --prefix=talos-lb \
   --mode=auto \
   --overwrite
+```
+
+Validate and run the action entrypoint:
+
+```bash
+./overlays/base/scripts/ha-proxy/haproxy-lb.sh validate --env=lab
+./overlays/base/scripts/ha-proxy/haproxy-lb.sh configure-vip --env=lab --overwrite
+./overlays/base/scripts/ha-proxy/haproxy-lb.sh reconcile-backends --env=lab --host=192.168.0.31 --user=vagrant
+./overlays/base/scripts/ha-proxy/haproxy-lb.sh status --env=lab
 ```
 
 Run only configuration steps for already provisioned hosts:

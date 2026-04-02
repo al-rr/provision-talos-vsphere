@@ -81,7 +81,7 @@ patch_project_vars_for_lab_defaults() {
   upsert_export_var "${vars_file}" "HAPROXY_NODE_1_IP" "192.168.0.31"
   upsert_export_var "${vars_file}" "HAPROXY_NODE_2_NAME" "talos-lb-2"
   upsert_export_var "${vars_file}" "HAPROXY_NODE_2_IP" "192.168.0.32"
-  upsert_export_var "${vars_file}" "TALOS_LOAD_BALANCER_RECONCILE_SCRIPT" "${REPO_ROOT}/overlays/base/scripts/ha-proxy/setup.sh"
+  upsert_export_var "${vars_file}" "TALOS_LOAD_BALANCER_RECONCILE_SCRIPT" "${REPO_ROOT}/overlays/base/scripts/ha-proxy/haproxy-lb.sh"
   upsert_export_var "${vars_file}" "TALOS_DNS_SYNC_REQUIRED" "true"
   upsert_export_var "${vars_file}" "TALOS_DNS_REGISTER_SCRIPT" "${REPO_ROOT}/overlays/base/scripts/dns/register-hosts.sh"
   upsert_export_var "${vars_file}" "TALOS_DNS_UNREGISTER_SCRIPT" "${REPO_ROOT}/overlays/base/scripts/dns/unregister-hosts.sh"
