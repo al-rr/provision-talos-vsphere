@@ -87,7 +87,11 @@ Required runtime variables are validated by `packer/vsphere-iso/build.sh`:
 - `VSPHERE_USERNAME`
 - `VSPHERE_PASSWORD`
 - `BUILD_USERNAME`
-- `BUILD_PASSWORD`
+- `BUILD_PASSWORD` or `BUILD_PASSWORD_ENCRYPTED`
+
+Ansible vars expected by upstream templates are exported automatically:
+- `ansible_username` defaults to `BUILD_USERNAME` (override with `ANSIBLE_USERNAME`)
+- `ansible_key` defaults to `BUILD_KEY` (override with `ANSIBLE_KEY`)
 
 Override options without changing local vars:
 - `--vars-file=/path/custom.pkrvars.hcl`

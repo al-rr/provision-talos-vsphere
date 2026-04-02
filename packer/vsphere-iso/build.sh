@@ -327,13 +327,19 @@ validate_runtime_vars() {
   [[ -n "${VSPHERE_USERNAME:-}" ]] || die "VSPHERE_USERNAME is empty. Set overlay vars, --vsphere-env-file, or --vsphere-username."
   [[ -n "${VSPHERE_PASSWORD:-}" ]] || die "VSPHERE_PASSWORD is empty. Set overlay vars, --vsphere-env-file, env var, or --vsphere-password."
   [[ -n "${BUILD_USERNAME:-}" ]] || die "BUILD_USERNAME is empty. Set overlay vars or --build-username."
-  [[ -n "${BUILD_PASSWORD:-}" ]] || die "BUILD_PASSWORD is empty. Set overlay vars or --build-password."
+  [[ -n "${BUILD_PASSWORD:-}" || -n "${BUILD_PASSWORD_ENCRYPTED:-}" ]] || {
+    die "Either BUILD_PASSWORD or BUILD_PASSWORD_ENCRYPTED is required."
+  }
 }
 
 ensure_build_password_encrypted() {
   if [[ -n "${BUILD_PASSWORD_ENCRYPTED:-}" ]]; then
     return 0
   fi
+
+  [[ -n "${BUILD_PASSWORD:-}" ]] || {
+    die "BUILD_PASSWORD_ENCRYPTED is empty and BUILD_PASSWORD is not set."
+  }
 
   command -v openssl >/dev/null 2>&1 || die "openssl is required to generate BUILD_PASSWORD_ENCRYPTED."
   export BUILD_PASSWORD_ENCRYPTED
@@ -345,6 +351,11 @@ ensure_build_key() {
   local candidate=""
 
   if [[ -n "${BUILD_KEY:-}" ]]; then
+    if [[ -r "${BUILD_KEY}" ]]; then
+      BUILD_KEY="$(head -n 1 "${BUILD_KEY}" | tr -d '\r\n')"
+      export BUILD_KEY
+      log_info "BUILD_KEY provided as file path; loaded public key content from file."
+    fi
     return 0
   fi
 

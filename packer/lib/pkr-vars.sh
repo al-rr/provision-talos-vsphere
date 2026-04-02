@@ -78,6 +78,9 @@ pkr_export_common_env() {
 }
 
 pkr_export_vars() {
+  local ansible_username="${ANSIBLE_USERNAME:-${BUILD_USERNAME:-}}"
+  local ansible_key="${ANSIBLE_KEY:-${BUILD_KEY:-}}"
+
   export PKR_VAR_vsphere_endpoint="${VSPHERE_ENDPOINT}"
   export PKR_VAR_vsphere_username="${VSPHERE_USERNAME}"
   export PKR_VAR_vsphere_password="${VSPHERE_PASSWORD}"
@@ -116,6 +119,8 @@ pkr_export_vars() {
   export PKR_VAR_build_password="${BUILD_PASSWORD}"
   export PKR_VAR_build_password_encrypted="${BUILD_PASSWORD_ENCRYPTED}"
   export PKR_VAR_build_key="${BUILD_KEY}"
+  export PKR_VAR_ansible_username="${ansible_username}"
+  export PKR_VAR_ansible_key="${ansible_key}"
   export PKR_VAR_communicator_proxy_host="${COMMUNICATOR_PROXY_HOST}"
   export PKR_VAR_communicator_proxy_port="${COMMUNICATOR_PROXY_PORT}"
   export PKR_VAR_communicator_proxy_username="${COMMUNICATOR_PROXY_USERNAME}"
@@ -126,5 +131,8 @@ pkr_export_vars() {
     export PACKER_LOG=1
     export PACKER_LOG_PATH="${PACKER_LOG_PATH}"
     mkdir -p "$(dirname "${PACKER_LOG_PATH}")"
+  else
+    unset PACKER_LOG || true
+    unset PACKER_LOG_PATH || true
   fi
 }

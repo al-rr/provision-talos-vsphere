@@ -20,8 +20,11 @@
 # Build account
 # export BUILD_USERNAME="vagrant"
 # export BUILD_PASSWORD="vagrant"
+# Optional when BUILD_PASSWORD is set; otherwise required.
 # export BUILD_PASSWORD_ENCRYPTED=""
-# export BUILD_KEY=""
+# export BUILD_KEY=""  # public key content or path to *.pub file
+# export ANSIBLE_USERNAME=""  # optional; defaults to BUILD_USERNAME
+# export ANSIBLE_KEY=""       # optional; defaults to BUILD_KEY
 
 # Common settings
 # export COMMON_DATA_SOURCE="disk"
