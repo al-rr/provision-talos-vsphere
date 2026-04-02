@@ -2,19 +2,14 @@
 
 This directory is the image-building module used by lab and platform workflows.
 
-## Canonical Structure
+## Canonical Builder
 
-Canonical path model is distro/version based:
-
-- `packer/packer/oraclelinux/8`
-- `packer/packer/ubuntu/24`
-
-Current runtime templates are still under backend-specific folders:
+Current canonical builder in this repository:
 
 - `packer/vsphere-iso`
-- `packer/vmware-iso`
 
-This keeps compatibility while converging to a reusable module contract.
+`vmware-iso` was removed from this repository to keep the module focused on the
+active vSphere/ESXi flow.
 
 ## Canonical Entrypoint
 
@@ -24,15 +19,14 @@ Use a single dispatcher:
 ./packer/build.sh
 ```
 
-Supported targets:
-- `vsphere-iso`: build directly on ESXi/vSphere.
-- `vmware-iso`: local VMware-based builds.
+Default builder is `vsphere-iso`. You can still set it explicitly with
+`--builder=vsphere-iso`.
 
 ## Prerequisites
 
 1. `packer` or `packerio` in `PATH`.
 2. `govc` in `PATH` for vSphere inventory checks.
-3. Network access to ESXi/vSphere when using `vsphere-iso`.
+3. Network access to ESXi/vSphere.
 
 ## Environment Setup
 
@@ -54,28 +48,16 @@ This exports:
 
 ## Examples
 
-Validate Ubuntu 24 in vSphere mode:
+Validate Ubuntu 24:
 
 ```bash
-./packer/build.sh --target=vsphere-iso --os=ubuntu --version=24 --action=validate
+./packer/build.sh --builder=vsphere-iso --os=ubuntu --version=24 --action=validate
 ```
 
-Build Oracle Linux 9 in vSphere mode:
+Build Oracle Linux 9 (default builder):
 
 ```bash
-./packer/build.sh --target=vsphere-iso --os=oraclelinux --version=9 --action=build
-```
-
-Validate all local VMware profiles:
-
-```bash
-./packer/build.sh --target=vmware-iso --os=all --action=validate
-```
-
-Build local Ubuntu 24 profile:
-
-```bash
-./packer/build.sh --target=vmware-iso --os=ubuntu --version=24 --action=build
+./packer/build.sh --os=oraclelinux --version=9 --action=build
 ```
 
 ## Support Matrix (Current)
@@ -83,7 +65,7 @@ Build local Ubuntu 24 profile:
 - Implemented:
   - `ubuntu/24`
   - `oraclelinux/9`
-- Scaffold only:
+- Planned:
   - `oraclelinux/8`
 
 ## Security Notes
