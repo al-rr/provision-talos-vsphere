@@ -5,17 +5,17 @@
 #   Dispatches build requests to either the vsphere-iso or vmware-iso modules.
 #
 # @arg --target string Build backend: vsphere-iso or vmware-iso. Defaults to vsphere-iso.
-# @arg --profile string Profile name. For vsphere-iso: oraclelinux-9|ubuntu-24. For vmware-iso this is mapped to --os.
-# @arg --os string VMware-ISO target OS: ubuntu|oraclelinux|all. Overrides --profile mapping in vmware-iso mode.
+# @arg --profile string Legacy profile selector (for compatibility): oraclelinux-9|ubuntu-24.
+# @arg --os string Target OS selector: ubuntu|oraclelinux|all.
+# @arg --version string Target OS version selector (for example: 24, 9, 8).
 # @arg --action string Action: init|validate|build. Defaults to validate.
-# @arg --env string Overlay env for vsphere-iso. Defaults to lab.
 # @arg --vars-file string Extra var file (repeatable).
 # @arg --packer-bin string Optional packer binary override.
 # @flag --dry-run Print commands without executing.
 # @flag --help,-h Show usage.
 #
 # @example
-#   ./packer/build.sh --target=vsphere-iso --profile=ubuntu-24 --env=lab --action=validate
+#   ./packer/build.sh --target=vsphere-iso --os=ubuntu --version=24 --action=validate
 # @example
 #   ./packer/build.sh --target=vmware-iso --os=all --action=validate
 
@@ -24,8 +24,8 @@ set -euo pipefail
 TARGET="vsphere-iso"
 PROFILE=""
 TARGET_OS=""
+TARGET_VERSION=""
 ACTION="validate"
-ENV_NAME="lab"
 PACKER_BIN="${PACKER_BIN:-}"
 DRY_RUN="false"
 EXTRA_VAR_FILES=()
@@ -43,10 +43,10 @@ Description:
 
 Options:
   --target=<name>       vsphere-iso | vmware-iso (default: vsphere-iso)
-  --profile=<name>      oraclelinux-9 | ubuntu-24
-  --os=<name>           ubuntu | oraclelinux | all (vmware-iso only)
+  --profile=<name>      Legacy profile selector: oraclelinux-9 | ubuntu-24
+  --os=<name>           ubuntu | oraclelinux | all
+  --version=<value>     OS version selector (example: 24, 9, 8)
   --action=<name>       init | validate | build (default: validate)
-  --env=<name>          Overlay env (vsphere-iso only, default: lab)
   --vars-file=<path>    Extra var file (repeatable)
   --packer-bin=<name>   Optional packer binary override
   --dry-run             Print commands without executing
@@ -54,7 +54,7 @@ Options:
 
 Examples:
   # Validate Ubuntu profile on vSphere/ESXi
-  ./packer/build.sh --target=vsphere-iso --profile=ubuntu-24 --env=lab --action=validate
+  ./packer/build.sh --target=vsphere-iso --os=ubuntu --version=24 --action=validate
 
   # Validate all vmware-iso profiles locally
   ./packer/build.sh --target=vmware-iso --os=all --action=validate
@@ -76,12 +76,12 @@ parse_args() {
         TARGET_OS="${1#*=}"
         shift
         ;;
-      --action=*)
-        ACTION="${1#*=}"
+      --version=*)
+        TARGET_VERSION="${1#*=}"
         shift
         ;;
-      --env=*)
-        ENV_NAME="${1#*=}"
+      --action=*)
+        ACTION="${1#*=}"
         shift
         ;;
       --vars-file=*)
@@ -109,13 +109,45 @@ parse_args() {
   done
 }
 
+resolve_vsphere_profile() {
+  if [[ -n "${PROFILE}" ]]; then
+    printf '%s\n' "${PROFILE}"
+    return 0
+  fi
+
+  case "${TARGET_OS}:${TARGET_VERSION}" in
+    ubuntu:24)
+      printf '%s\n' "ubuntu-24"
+      return 0
+      ;;
+    oraclelinux:9)
+      printf '%s\n' "oraclelinux-9"
+      return 0
+      ;;
+    oraclelinux:8)
+      echo "[ERROR] oraclelinux/8 is defined in the canonical layout scaffold, but the vsphere template is not implemented yet." >&2
+      echo "[ERROR] Current supported selector: --os=oraclelinux --version=9" >&2
+      exit 1
+      ;;
+    :|:*)
+      printf '%s\n' "oraclelinux-9"
+      return 0
+      ;;
+    *)
+      echo "[ERROR] Unsupported vsphere selector --os=${TARGET_OS} --version=${TARGET_VERSION}" >&2
+      echo "[ERROR] Supported combinations: ubuntu/24, oraclelinux/9" >&2
+      exit 1
+      ;;
+  esac
+}
+
 run_vsphere_iso() {
-  local profile="${PROFILE:-oraclelinux-9}"
+  local profile
+  profile="$(resolve_vsphere_profile)"
   local cmd=(
     "${VSPHERE_ENTRYPOINT}"
     "--profile=${profile}"
     "--action=${ACTION}"
-    "--env=${ENV_NAME}"
   )
   local vf
   for vf in "${EXTRA_VAR_FILES[@]}"; do
@@ -143,12 +175,34 @@ map_profile_to_os() {
   esac
 }
 
-run_vmware_iso() {
-  local os_name="${TARGET_OS}"
-  if [[ -z "${os_name}" ]]; then
-    os_name="$(map_profile_to_os "${PROFILE}")"
+resolve_vmware_os() {
+  if [[ -n "${TARGET_OS}" ]]; then
+    printf '%s\n' "${TARGET_OS}"
+    return 0
   fi
+  printf '%s\n' "$(map_profile_to_os "${PROFILE}")"
+}
+
+run_vmware_iso() {
+  local os_name
+  os_name="$(resolve_vmware_os)"
   [[ -n "${os_name}" ]] || os_name="all"
+
+  if [[ -n "${TARGET_VERSION}" ]]; then
+    case "${os_name}:${TARGET_VERSION}" in
+      ubuntu:24|oraclelinux:9|all:*)
+        ;;
+      oraclelinux:8)
+        echo "[ERROR] oraclelinux/8 is scaffolded in canonical layout but vmware-iso template is not implemented yet." >&2
+        echo "[ERROR] Current supported selector: --os=oraclelinux --version=9" >&2
+        exit 1
+        ;;
+      *)
+        echo "[ERROR] Unsupported vmware selector --os=${os_name} --version=${TARGET_VERSION}" >&2
+        exit 1
+        ;;
+    esac
+  fi
 
   local cmd=(
     "${VMWARE_ENTRYPOINT}"

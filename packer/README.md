@@ -2,6 +2,20 @@
 
 This directory is the image-building module used by lab and platform workflows.
 
+## Canonical Structure
+
+Canonical path model is distro/version based:
+
+- `packer/packer/oraclelinux/8`
+- `packer/packer/ubuntu/24`
+
+Current runtime templates are still under backend-specific folders:
+
+- `packer/vsphere-iso`
+- `packer/vmware-iso`
+
+This keeps compatibility while converging to a reusable module contract.
+
 ## Canonical Entrypoint
 
 Use a single dispatcher:
@@ -40,16 +54,16 @@ This exports:
 
 ## Examples
 
-Validate Ubuntu profile in vSphere mode:
+Validate Ubuntu 24 in vSphere mode:
 
 ```bash
-./packer/build.sh --target=vsphere-iso --profile=ubuntu-24 --env=lab --action=validate
+./packer/build.sh --target=vsphere-iso --os=ubuntu --version=24 --action=validate
 ```
 
-Build Oracle Linux profile in vSphere mode:
+Build Oracle Linux 9 in vSphere mode:
 
 ```bash
-./packer/build.sh --target=vsphere-iso --profile=oraclelinux-9 --env=lab --action=build
+./packer/build.sh --target=vsphere-iso --os=oraclelinux --version=9 --action=build
 ```
 
 Validate all local VMware profiles:
@@ -58,11 +72,19 @@ Validate all local VMware profiles:
 ./packer/build.sh --target=vmware-iso --os=all --action=validate
 ```
 
-Build only local Ubuntu profile:
+Build local Ubuntu 24 profile:
 
 ```bash
-./packer/build.sh --target=vmware-iso --os=ubuntu --action=build
+./packer/build.sh --target=vmware-iso --os=ubuntu --version=24 --action=build
 ```
+
+## Support Matrix (Current)
+
+- Implemented:
+  - `ubuntu/24`
+  - `oraclelinux/9`
+- Scaffold only:
+  - `oraclelinux/8`
 
 ## Security Notes
 
