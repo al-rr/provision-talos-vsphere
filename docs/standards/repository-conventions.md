@@ -1,15 +1,11 @@
 # Repository Conventions
 
-This document defines the repository-level rules for `infra-gitops`.
+This document defines repository-level conventions for `provision-talos-vsphere`.
 
 ## Directory Roles
 
-- `scripts/`: reusable Bash automation modules
-- `ansible/`: reusable roles, collections, and playbooks
-- `terraform/`: reusable modules and environment definitions
-- `packer/`: image-building assets
-- `containers/`: container images and support files
-- `overlays/`: local lab support or tool-specific overlays
+- `overlays/`: canonical project automation and environment-specific overrides
+- external `infra-gitops/`: reusable shared automation modules consumed by this project
 - `docs/`: canonical documentation
 
 ## What Belongs Here
@@ -27,7 +23,8 @@ Examples:
 
 ## What Does Not Belong Here
 
-Do not place the following in `infra-gitops` unless it is clearly reusable:
+Do not place the following in this repository unless it is required by the
+project runtime flow:
 
 - service-specific deployment logic
 - project-only runtime configuration
@@ -42,37 +39,26 @@ standard.
 
 Good scopes:
 
-- `scripts/apache/`
-- `scripts/freeipa/`
-- `docs/standards/bash-script-standard.md`
+- `overlays/base/scripts/talos/`
+- `overlays/base/scripts/ha-proxy/`
+- `docs/policies/`
 
 Bad scope:
 
-- unrelated changes in `apache`, `freeipa`, `terraform`, and README in one PR
+- unrelated changes in Talos, HAProxy, DNS, and docs in one PR
 
 ## Module Layout
 
 A Bash module should prefer a layout like:
 
-```text
-scripts/<module>/
-├── README.md
-├── vars.sh
-├── functions.sh
-├── install_*.sh
-├── setup_*.sh
-├── upgrade_*.sh
-├── conf/
-└── tests/ or Vagrant assets when justified
-```
-
-Not every module needs every file, but structure should stay predictable.
+This repository keeps active automation under `overlays/base/scripts/` and
+environment overrides under `overlays/<env>/`.
 
 ## Canonical Documentation Rule
 
 Normative rules live in `docs/standards/`.
 
-Module READMEs should document module-specific behavior, not redefine platform
+Module READMEs should document module-specific behavior, not redefine project
 standards.
 
 ## Legacy Rule
