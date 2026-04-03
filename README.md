@@ -27,7 +27,7 @@ overrides and bootstrap assets.
 - `overlays/base/conf/`: shared config inputs and reusable templates.
 - `overlays/base/scripts/`: canonical shell entrypoints and helper libraries.
 - `overlays/base/ansible/`: shared HAProxy Ansible automation.
-- `packer/vsphere-iso/`: canonical image build module for vSphere/ESXi.
+- `packer/vsphere-iso/`: optional image build module for vSphere/ESXi.
 - `overlays/base/terraform/`: shared Terraform for HAProxy and Talos.
 - `overlays/base/govc/`: shared GOVC helpers, including HAProxy VM provisioning.
 - `overlays/lab/`: lab controller bootstrap assets, lab vars, and validation support.
@@ -56,12 +56,14 @@ configuration contract.
 ### HAProxy
 
 ```bash
-./overlays/base/scripts/haproxy-packer-build.sh --env=prod --validate-only
 ./overlays/base/scripts/haproxy-ansible.sh --env=prod --syntax-check
 ./overlays/base/scripts/haproxy-ansible.sh --env=prod
 ./overlays/base/scripts/haproxy-terraform.sh --env=prod
 ./overlays/base/scripts/haproxy-terraform.sh --env=prod --apply
 ```
+
+If you need to generate a custom base image first, use the dedicated Packer
+instructions and then provision via `govc`/Terraform.
 
 Use the Terraform path for HAProxy as a draft or future-facing path until the
 VIP automation gap is closed.
@@ -82,6 +84,8 @@ VIP automation gap is closed.
   separately from the Kubernetes endpoint.
 - Talos secrets and generated machine configuration stay outside Terraform
   state and are managed with `talosctl`.
+- Packer is optional and decoupled: provisioning flows should not depend on
+  running image builds inline.
 - Lab assets are for local validation and controller bootstrap. They are not
   the production source of truth.
 

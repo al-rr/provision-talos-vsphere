@@ -307,6 +307,13 @@ Practical recommendation:
 - Use OVA for current lab flow (faster/consistent with this repo)
 - Use ISO when you explicitly need ISO lifecycle behavior
 
+Decoupling rule:
+
+- OVA/template generation is optional and external to day-1 lifecycle actions.
+- Day-1 should only consume an already available image source.
+- If a custom image is required, run Packer separately and then reuse the
+  resulting artifact URL/path in provisioning variables.
+
 ## Control-Plane And Worker Images
 
 This project intentionally supports different Talos installer images per role:

@@ -53,7 +53,13 @@ At minimum, decide:
 - cluster API endpoint
 - whether the endpoint is fronted by a load balancer VIP
 - whether a dedicated DNS VM is required
-- template or OVA source used for the VMs
+- OVA/template source used for the VMs (pre-existing or built separately)
+
+Provisioning note:
+
+- Day-1 cluster provisioning should run with `govc`/Terraform against an
+  already available OVA/template source.
+- If you need a custom image, run the Packer workflow separately first.
 
 Use this planning document first:
 

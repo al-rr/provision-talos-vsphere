@@ -326,6 +326,13 @@ Recomendacao pratica:
 - Use OVA para o fluxo atual de lab (mais rapido/consistente com este repo)
 - Use ISO quando voce precisar explicitamente do ciclo de vida ISO
 
+Regra de desacoplamento:
+
+- A geracao de OVA/template e opcional e externa as acoes de ciclo de vida day-1.
+- O day-1 deve apenas consumir uma origem de imagem ja disponivel.
+- Se precisar de imagem customizada, execute o Packer separadamente e depois
+  reutilize a URL/caminho do artefato nas variaveis de provisionamento.
+
 ## Imagens De Control-Plane E Worker
 
 Este projeto suporta de forma intencional imagens Talos installer diferentes
