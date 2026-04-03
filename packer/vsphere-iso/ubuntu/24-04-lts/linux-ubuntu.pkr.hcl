@@ -13,16 +13,18 @@ packer {
 locals {
   build_by          = "Built by: HashiCorp Packer ${packer.version}"
   build_date        = formatdate("YYYY-MM-DD hh:mm ZZZ", timestamp())
+  build_id          = formatdate("YYYYMMDD-hhmmss", timestamp())
   build_version     = "0.0.1"
   build_description = "Version: ${local.build_version}\nBuilt on: ${local.build_date}\n${local.build_by}"
   iso_paths = {
     content_library = "${var.common_iso_content_library}/${var.iso_content_library_item}/${var.iso_file}",
     datastore       = "[${var.common_iso_datastore}] ${var.iso_datastore_path}/${var.iso_file}"
   }
-  manifest_date   = formatdate("YYYYMMDD-hhmmss", timestamp())
+  manifest_date   = local.build_id
   manifest_path   = "${path.cwd}/manifests/"
   manifest_output = "${local.manifest_path}${local.manifest_date}.json"
-  ovf_export_path = "${path.cwd}/artifacts/${var.vm_name}"
+  vm_name         = var.vm_name != "" ? var.vm_name : (var.vm_name_timestamp_enabled ? "${var.vm_name_prefix}-${local.build_id}" : var.vm_name_prefix)
+  ovf_export_path = "${path.cwd}/artifacts/${local.vm_name}"
 
   data_source_content = {
     "/meta-data" = file("${abspath(path.root)}/data/meta-data")
@@ -61,7 +63,7 @@ source "vsphere-iso" "linux-ubuntu" {
   resource_pool                  = var.vsphere_resource_pool
   set_host_for_datastore_uploads = var.vsphere_set_host_for_datastore_uploads
 
-  vm_name              = var.vm_name
+  vm_name              = local.vm_name
   guest_os_type        = var.vm_guest_os_type
   firmware             = var.vm_firmware
   CPUs                 = var.vm_cpu_count
@@ -134,7 +136,7 @@ source "vsphere-iso" "linux-ubuntu" {
   dynamic "export" {
     for_each = var.common_ovf_export_enabled ? [1] : []
     content {
-      name        = var.vm_name
+      name        = local.vm_name
       force       = var.common_ovf_export_overwrite
       image_files = var.common_ovf_export_image_files
       options = [

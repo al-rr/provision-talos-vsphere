@@ -91,15 +91,10 @@ firewall --enabled --ssh
 
 ### Post-installation
 %post
-dnf install -y oracle-epel-release-el9
-dnf makecache
-dnf install -y sudo open-vm-tools perl
-%{ if additional_packages != "" ~}
-dnf install -y ${additional_packages}
-%{ endif ~}
-
 echo "${build_username} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/${build_username}
 sed -i "s/^.*requiretty/#Defaults requiretty/" /etc/sudoers
+systemctl enable sshd
+systemctl enable vmtoolsd
 %{ if build_key != "" ~}
 install -d -m 0700 /home/${build_username}/.ssh
 cat <<'EOF_AUTHKEY' > /home/${build_username}/.ssh/authorized_keys
@@ -107,6 +102,9 @@ ${build_key}
 EOF_AUTHKEY
 chown -R ${build_username}:${build_username} /home/${build_username}/.ssh
 chmod 0600 /home/${build_username}/.ssh/authorized_keys
+%{ endif ~}
+%{ if additional_packages != "" ~}
+dnf install -y ${additional_packages} || true
 %{ endif ~}
 %end
 

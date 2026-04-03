@@ -327,8 +327,8 @@ validate_runtime_vars() {
   [[ -n "${VSPHERE_USERNAME:-}" ]] || die "VSPHERE_USERNAME is empty. Set overlay vars, --vsphere-env-file, or --vsphere-username."
   [[ -n "${VSPHERE_PASSWORD:-}" ]] || die "VSPHERE_PASSWORD is empty. Set overlay vars, --vsphere-env-file, env var, or --vsphere-password."
   [[ -n "${BUILD_USERNAME:-}" ]] || die "BUILD_USERNAME is empty. Set overlay vars or --build-username."
-  [[ -n "${BUILD_PASSWORD:-}" || -n "${BUILD_PASSWORD_ENCRYPTED:-}" ]] || {
-    die "Either BUILD_PASSWORD or BUILD_PASSWORD_ENCRYPTED is required."
+  [[ -n "${BUILD_PASSWORD:-}" ]] || {
+    die "BUILD_PASSWORD is required for communicator SSH login."
   }
 }
 

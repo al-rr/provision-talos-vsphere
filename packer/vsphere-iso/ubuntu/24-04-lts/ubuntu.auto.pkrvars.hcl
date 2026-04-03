@@ -1,5 +1,6 @@
 # Ubuntu 24.04 LTS profile defaults for lab/vSphere.
-vm_name                 = "ubuntu-24-04-lts-template"
+vm_name_prefix          = "ubuntu-24-04-lts-template"
+vm_name_timestamp_enabled = true
 vsphere_resource_pool   = null
 common_data_source      = "disk"
 # ESXi standalone does not support convert_to_template. Keep as golden VM.

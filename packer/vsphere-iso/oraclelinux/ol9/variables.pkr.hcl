@@ -126,8 +126,20 @@ variable "vm_guest_os_type" {
 
 variable "vm_name" {
   type        = string
-  description = "Name of the VM/template artifact to build."
+  description = "Explicit VM/template name override. When empty, vm_name_prefix/timestamp settings are used."
+  default     = ""
+}
+
+variable "vm_name_prefix" {
+  type        = string
+  description = "Base name prefix used when vm_name is not explicitly set."
   default     = "oraclelinux-9-template"
+}
+
+variable "vm_name_timestamp_enabled" {
+  type        = bool
+  description = "Append timestamp suffix (YYYYMMDD-hhmmss) to vm_name_prefix when vm_name is empty."
+  default     = true
 }
 
 variable "vm_guest_os_cloudinit" {

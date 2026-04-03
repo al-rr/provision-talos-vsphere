@@ -40,6 +40,7 @@ packer {
 locals {
   build_by          = "Built by: HashiCorp Packer ${packer.version}"
   build_date        = formatdate("YYYY-MM-DD hh:mm ZZZ", timestamp())
+  build_id          = formatdate("YYYYMMDD-hhmmss", timestamp())
   # build_version     = data.git-repository.cwd.head
   build_version     = "0.0.1"
   build_description = "Version: ${local.build_version}\nBuilt on: ${local.build_date}\n${local.build_by}"  
@@ -47,9 +48,10 @@ locals {
     content_library = "${var.common_iso_content_library}/${var.iso_content_library_item}/${var.iso_file}",
     datastore       = "[${var.common_iso_datastore}] ${var.iso_datastore_path}/${var.iso_file}"
   }
-  manifest_date   = formatdate("YYYYMMDD-hhmmss", timestamp())
+  manifest_date   = local.build_id
   manifest_path   = "${path.cwd}/manifests/"
   manifest_output = "${local.manifest_path}${local.manifest_date}.json"
+  vm_name         = var.vm_name != "" ? var.vm_name : (var.vm_name_timestamp_enabled ? "${var.vm_name_prefix}-${local.build_id}" : var.vm_name_prefix)
   ovf_export_path = "${path.cwd}/artifacts/${local.vm_name}"
   
   data_source_content = {
@@ -79,7 +81,6 @@ locals {
     })
   }
   data_source_command = var.common_data_source == "http" ? "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ks.cfg" : "inst.ks=cdrom:/ks.cfg"
-  vm_name             = var.vm_name
   bucket_name         = replace("${var.vm_guest_os_family}-${var.vm_guest_os_name}-${var.vm_guest_os_version}", ".", "")
   bucket_description  = "${var.vm_guest_os_family} ${var.vm_guest_os_name} ${var.vm_guest_os_version}"
 }
@@ -140,6 +141,7 @@ source "vsphere-iso" "linux-oracle" {
   http_port_max = var.common_data_source == "http" ? var.common_http_port_max : null
   boot_order    = var.vm_boot_order
   boot_wait     = var.vm_boot_wait
+  boot_keygroup_interval = "750ms"
   boot_command = [
     // This sends the "up arrow" key, typically used to navigate through boot menu options.
     "<up>",

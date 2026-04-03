@@ -87,7 +87,8 @@ Required runtime variables are validated by `packer/vsphere-iso/build.sh`:
 - `VSPHERE_USERNAME`
 - `VSPHERE_PASSWORD`
 - `BUILD_USERNAME`
-- `BUILD_PASSWORD` or `BUILD_PASSWORD_ENCRYPTED`
+- `BUILD_PASSWORD` (required by SSH communicator)
+- `BUILD_PASSWORD_ENCRYPTED` (optional; auto-generated from `BUILD_PASSWORD` when empty)
 
 Ansible vars expected by upstream templates are exported automatically:
 - `ansible_username` defaults to `BUILD_USERNAME` (override with `ANSIBLE_USERNAME`)
@@ -97,6 +98,11 @@ Override options without changing local vars:
 - `--vars-file=/path/custom.pkrvars.hcl`
 - `--vsphere-env-file=/path/vsphere.env` (when running `vsphere-iso/build.sh` directly)
 - direct CLI overrides such as `--vsphere-username`, `--vsphere-password` (direct `vsphere-iso/build.sh`)
+
+Artifact naming (default behavior):
+- `vm_name` empty => generated name: `${vm_name_prefix}-${YYYYMMDD-hhmmss}`
+- `vm_name_timestamp_enabled=true` by default in profile auto var files
+- set `vm_name` explicitly when you need a fixed artifact name
 
 ## Examples
 

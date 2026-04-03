@@ -8,11 +8,11 @@
     Packer Plugin for VMware vSphere: 'vsphere-iso' builder.
 */
 
-// EDITADO PARA TESTE.
-vm_name                 = "oraclelinux-9-x86-64-template"
-vm_disk_controller_type = ["sata"]
+vm_name_prefix          = "oraclelinux-9-x86-64-template"
+vm_name_timestamp_enabled = true
 vsphere_resource_pool   = null
-common_template_conversion = true
+# common_template_conversion = true
+common_template_conversion = false
 # vsphere_endpoint="odin.infra.al.rr.lan"
 common_data_source = "disk"
 # vsphere_set_host_for_datastore_uploads="false"
@@ -30,6 +30,7 @@ vm_guest_os_type = "oracleLinux8_64Guest"
 // Virtual Machine Hardware Settings
 # vm_firmware = "efi-secure"
 vm_firmware = "efi"
+vm_boot_wait = "10s"
 
 // Removable Media Settings
 # iso_datastore_path       = "iso/linux/oracle-linux/9/amd64"
