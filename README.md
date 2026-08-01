@@ -19,6 +19,8 @@ overrides and bootstrap assets.
 - Repository rules: [`docs/policies/`](docs/policies/)
 - Repo-specific architecture and operator context:
   [`docs/devops/platform-automation-architecture.md`](docs/devops/platform-automation-architecture.md)
+- Cross-repository handoff for a clean host and automation agents:
+  [`docs/en/cross-repo-handoff.md`](docs/en/cross-repo-handoff.md)
 - Shared defaults: [`overlays/base/scripts/vars.sh`](overlays/base/scripts/vars.sh)
 - Shared helpers: [`overlays/base/scripts/functions.sh`](overlays/base/scripts/functions.sh)
 

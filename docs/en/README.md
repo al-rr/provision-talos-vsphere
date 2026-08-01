@@ -21,6 +21,7 @@ This index is the English entrypoint for repository documentation.
 ## Architecture
 
 - `docs/devops/platform-automation-architecture.md`
+- `docs/en/cross-repo-handoff.md`
 
 ## Talos Operator Guides
 

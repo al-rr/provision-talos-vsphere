@@ -22,6 +22,7 @@ repositorio.
 ## Arquitetura
 
 - `docs/devops/platform-automation-architecture.md`
+- `docs/pt-br/cross-repo-handoff.md`
 
 ## Guias Operacionais do Talos
 

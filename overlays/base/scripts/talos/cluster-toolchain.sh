@@ -19,7 +19,7 @@ SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_PATH}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
-TOOLCHAIN_DIR="${TALOS_TOOLCHAIN_DIR:-/home/vagrant/talos-toolchain}"
+TOOLCHAIN_DIR="${TALOS_TOOLCHAIN_DIR:-${REPO_ROOT}/../talos-toolchain}"
 
 upsert_export_var() {
   local file="$1"
@@ -67,6 +67,10 @@ patch_project_vars_for_lab_defaults() {
   vars_file="${project_abs}/vars.sh"
   [[ -f "${vars_file}" ]] || return 0
 
+  if ! grep -q '^LAB_REPO_ROOT=' "${vars_file}"; then
+    sed -i '/^PROJECT_DIR=/a LAB_REPO_ROOT="$(cd "${PROJECT_DIR}/../../../.." \&\& pwd)"\nWORKSPACE_ROOT="$(dirname "${LAB_REPO_ROOT}")"' "${vars_file}"
+  fi
+
   upsert_export_var "${vars_file}" "VSPHERE_ENDPOINT" "192.168.0.233"
   upsert_export_var "${vars_file}" "VSPHERE_USERNAME" "root"
   upsert_export_var "${vars_file}" "VSPHERE_PASSWORD" "CHANGE_ME"
@@ -85,7 +89,7 @@ patch_project_vars_for_lab_defaults() {
   upsert_export_var "${vars_file}" "TALOS_DNS_SYNC_REQUIRED" "true"
   upsert_export_var "${vars_file}" "TALOS_DNS_REGISTER_SCRIPT" "${REPO_ROOT}/overlays/base/scripts/dns/register-hosts.sh"
   upsert_export_var "${vars_file}" "TALOS_DNS_UNREGISTER_SCRIPT" "${REPO_ROOT}/overlays/base/scripts/dns/unregister-hosts.sh"
-  upsert_export_var "${vars_file}" "TALOS_POST_BOOTSTRAP_HELM_SOURCE_PATH" "/home/vagrant/talos-vsphere-gitops/environments/lab/helm"
+  upsert_export_var "${vars_file}" "TALOS_POST_BOOTSTRAP_HELM_SOURCE_PATH" "\${WORKSPACE_ROOT}/talos-vsphere-gitops/environments/lab/helm"
 }
 
 usage() {

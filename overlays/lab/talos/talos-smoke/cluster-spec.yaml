@@ -1,0 +1,16 @@
+apiVersion: platform.labs/v1alpha1
+kind: TalosClusterSpec
+metadata:
+  name: talos-smoke
+spec:
+  sourceOfTruth:
+    varsFile: vars.sh
+    localVarsFile: vars.local.sh
+  workflow:
+    generate: "cluster.sh generate --project-dir=<project-dir>"
+    provision: "cluster.sh provision --project-dir=<project-dir>"
+    prepareBootstrap: "cluster.sh prepare-bootstrap --project-dir=<project-dir>"
+    applyConfig: "cluster.sh apply-config --project-dir=<project-dir>"
+    bootstrap: "cluster.sh bootstrap --project-dir=<project-dir>"
+    syncAccess: "cluster.sh sync-access --project-dir=<project-dir>"
+    postBootstrap: "cluster.sh apply-post-bootstrap --project-dir=<project-dir>"

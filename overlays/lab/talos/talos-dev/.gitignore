@@ -1,0 +1,3 @@
+vars.local.sh
+generated/*
+!generated/.gitkeep
