@@ -23,7 +23,6 @@ overlays/
     ansible/
     conf/
     govc/
-    packer/
     scripts/
     terraform/
   lab/
@@ -70,10 +69,11 @@ Use the documents in this order when repository behavior is unclear:
 
 ## Tool Ownership
 
-- HAProxy VM lifecycle: `govc` now, `Packer` later
+- HAProxy VM lifecycle: `govc` and/or `Terraform`
 - HAProxy service configuration: `Ansible`
 - Talos VM lifecycle: `Terraform`
 - Talos secrets and generated machine configuration: `talosctl`
+- Image build workflow: optional and external (`infra-gitops/packer`)
 
 The current target topology for the load balancer layer is `2x HAProxy + VIP`.
 Do not describe the HAProxy path as fully complete until VIP automation exists.
@@ -97,6 +97,9 @@ Maintained operator entrypoints live under `overlays/base/scripts/`:
 - `haproxy-terraform.sh`
 - `talos-terraform.sh`
 - `lint-shell.sh`
+
+`haproxy-packer-build.sh` is a compatibility wrapper that delegates image build
+to the external canonical module at `infra-gitops/packer`.
 
 Helper loaders such as `load-ansible-vars.sh`, `load-govc-vars.sh`,
 `load-packer-vars.sh`, and `load-terraform-vars.sh` are internal support

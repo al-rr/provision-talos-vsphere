@@ -1,0 +1,48 @@
+# Cross-Repository Handoff
+
+This document is the durable execution context for a clean host and for automation agents. Treat the three repositories as sibling checkouts in one workspace; do not depend on a fixed absolute path.
+
+## Repository Roles
+
+- `talos-toolchain`: reusable day-1 and day-2 Talos command layer.
+- `talos-vsphere-gitops`: GitOps source of truth for platform manifests.
+- `talos-vsphere-lab`: integration repository for vSphere/ESXi topology, environment overlays, and validation scenarios.
+- `infra-gitops`: owns Packer/image-build automation. Report its defects and improvements as issues in that repository; do not restore Packer code here.
+
+## Clean Host Setup
+
+Choose a workspace and clone the repositories as siblings:
+
+```bash
+export WORKSPACE_ROOT="$HOME/platform-workspace"
+mkdir -p "$WORKSPACE_ROOT"
+cd "$WORKSPACE_ROOT"
+git clone git@github.com:al-rr/talos-toolchain.git
+git clone git@github.com:ednillibanio/talos-vsphere-gitops.git
+git clone git@github.com:al-rr/provision-talos-vsphere.git talos-vsphere-lab
+export TALOS_TOOLCHAIN_DIR="$WORKSPACE_ROOT/talos-toolchain"
+```
+
+Install the tools required by the selected workflow (`bash`, `git`, `talosctl`, `kubectl`, `govc`, Terraform, and the lab controller dependencies). Use Git Bash on the Windows operator host when following the lab repository policy.
+
+## Configuration and Execution Order
+
+1. In the lab checkout, copy `vars.local.example.sh` to `vars.local.sh` for the selected project (`talos-dev` or `talos-smoke`) and supply host-specific credentials, topology, and endpoints. Never commit this file.
+2. Review the tracked `vars.sh`, patches, and schematics; all project-relative paths derive from the project/workspace location.
+3. Run the day-1 lifecycle with `cluster.sh` or the transition wrapper `cluster-toolchain.sh`: `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`, and `sync-access`.
+4. Apply the post-bootstrap baseline only after cluster access works. It reads platform manifests from the sibling GitOps checkout.
+5. Use Argo CD and the GitOps repository for day-2 application changes.
+
+## Validation and Known Gaps
+
+- Before infrastructure changes, run shell validation (`make lint-sh`) and use each command's dry-run mode where available.
+- Generated configuration, kubeconfig, talosconfig, and secrets remain local under `generated/` and must not be staged.
+- The supported HAProxy target is two nodes with a VIP. Re-check the current HA/VIP automation status in `agenda.md` before a production rollout.
+- The local lab is an integration and validation environment, not the production source of truth. Keep environment values in the appropriate overlay and local override file.
+
+## Continuation Checklist
+
+- Read this document, `agenda.md`, and `docs/devops/platform-automation-architecture.md` first.
+- Check all three repositories with `git status --short --branch` before work.
+- Create focused PRs against each repository's `main`; merge only after the relevant local and required remote checks succeed.
+- Record newly discovered image-build work in `infra-gitops` as an issue.

@@ -53,7 +53,13 @@ At minimum, decide:
 - cluster API endpoint
 - whether the endpoint is fronted by a load balancer VIP
 - whether a dedicated DNS VM is required
-- template or OVA source used for the VMs
+- OVA/template source used for the VMs (pre-existing or built separately)
+
+Provisioning note:
+
+- Day-1 cluster provisioning should run with `govc`/Terraform against an
+  already available OVA/template source.
+- If you need a custom image, run the Packer workflow separately first.
 
 Use this planning document first:
 
@@ -73,6 +79,10 @@ For a new Talos cluster, the recommended order is:
 8. Bootstrap the cluster.
 9. Configure kubeconfig and validate the cluster.
 10. Proceed with post-bootstrap components such as Cilium.
+
+For exact commands in canonical order, follow:
+
+- [LAB_DAY1_RUNBOOK.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/LAB_DAY1_RUNBOOK.md)
 
 ## Where To Go Next
 

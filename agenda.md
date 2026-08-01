@@ -7,6 +7,8 @@
   model to production.
 - Keep the repository explicit about what is active, what is draft, and what is
   planned next.
+- Keep the cross-repository continuation guide current in
+  `docs/en/cross-repo-handoff.md` and `docs/pt-br/cross-repo-handoff.md`.
 
 ## Overlay Model
 

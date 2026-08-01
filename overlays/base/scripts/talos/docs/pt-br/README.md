@@ -6,6 +6,7 @@ do modulo Talos.
 ## Guias Disponiveis
 
 - `GETTING_STARTED.pt-br.md`
+- `LAB_DAY1_RUNBOOK.pt-br.md`
 - `CLUSTER_GUIDE.pt-br.md`
 - `ARGOCD_GITOPS_GUIDE.pt-br.md`
 - `LONGHORN_GUIDE.pt-br.md`

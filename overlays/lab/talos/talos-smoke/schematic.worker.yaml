@@ -1,0 +1,7 @@
+customization:
+  systemExtensions:
+    officialExtensions:
+      - siderolabs/vmtoolsd-guest-agent
+      - siderolabs/iscsi-tools
+      - siderolabs/util-linux-tools
+  bootloader: sd-boot

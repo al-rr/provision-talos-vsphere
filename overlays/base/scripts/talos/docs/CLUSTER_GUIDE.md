@@ -7,6 +7,28 @@ repository.
 
 This guide is intentionally explicit about execution order and script scope.
 
+If you want a single canonical command flow for lab day-1, use:
+
+- [LAB_DAY1_RUNBOOK.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/LAB_DAY1_RUNBOOK.md)
+
+## Execution Entry Points (Transition)
+
+Current recommendation during toolchain migration:
+
+- Day-1: use `cluster-toolchain.sh`
+- Day-2: use `talos-gitops-toolchain.sh`
+
+Those wrappers delegate to external `talos-toolchain` scripts and keep this
+repository as the integration layer.
+
+Examples:
+
+```bash
+./overlays/base/scripts/talos/cluster-toolchain.sh create-project --project-dir=overlays/lab/talos/talos-dev
+./overlays/base/scripts/talos/cluster-toolchain.sh generate --project-dir=overlays/lab/talos/talos-dev
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm --kube-context=admin@talos-dev --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
+```
+
 ## Scope And Source Of Truth
 
 Use this guide together with:
@@ -116,6 +138,22 @@ Recommended `cluster.sh` execution order:
 - Use `--project-dir=<path-to-cluster-project>` in normal operation.
 - `--vars-file` remains available for manual/advanced flows.
 - `--env` is removed from `cluster.sh`.
+
+Day-1 action mapping contract in project vars:
+
+- `TALOS_DAY1_GENERATE_CMD`
+- `TALOS_DAY1_PROVISION_CMD`
+- `TALOS_DAY1_PREPARE_BOOTSTRAP_CMD`
+- `TALOS_DAY1_APPLY_CONFIG_CMD`
+- `TALOS_DAY1_BOOTSTRAP_CMD`
+- `TALOS_DAY1_SYNC_ACCESS_CMD`
+
+`cluster.sh` executes these mappings directly for Talos lifecycle actions
+(`generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`,
+`sync-access`). If a mapping is missing, execution fails explicitly.
+
+`apply-post-bootstrap` remains a separate action and is not part of the mapped
+Talos lifecycle command set.
 
 Example:
 
@@ -268,6 +306,13 @@ Practical recommendation:
 
 - Use OVA for current lab flow (faster/consistent with this repo)
 - Use ISO when you explicitly need ISO lifecycle behavior
+
+Decoupling rule:
+
+- OVA/template generation is optional and external to day-1 lifecycle actions.
+- Day-1 should only consume an already available image source.
+- If a custom image is required, run Packer separately and then reuse the
+  resulting artifact URL/path in provisioning variables.
 
 ## Control-Plane And Worker Images
 

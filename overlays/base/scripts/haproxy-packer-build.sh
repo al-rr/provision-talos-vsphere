@@ -1,101 +1,109 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# @describe Validate or build the HAProxy template from the base Packer tree.
+# @describe Compatibility wrapper for HAProxy image build using infra-gitops/packer.
 # @option --env Target overlay environment. Defaults to prod.
-# @flag --validate-only Only run packer init and validate.
+# @option --profile vSphere-ISO profile. Defaults to ubuntu-24.
+# @option --infra-gitops-dir Path to infra-gitops repository root. Defaults to /home/vagrant/infra-gitops.
+# @option --infra-packer-dir Path to canonical packer module. Overrides --infra-gitops-dir/packer.
+# @flag --validate-only Only run init+validate through the canonical builder.
 
 ENV_NAME="prod"
+PROFILE_NAME="ubuntu-24"
 VALIDATE_ONLY="false"
+INFRA_GITOPS_DIR="${INFRA_GITOPS_DIR:-/home/vagrant/infra-gitops}"
+INFRA_PACKER_DIR="${INFRA_PACKER_DIR:-}"
+PASSTHROUGH_ARGS=()
+
+usage() {
+  cat <<EOF
+Usage: $0 [options]
+
+Options:
+  --env=<name>         Overlay environment (default: prod)
+  --profile=<name>     vSphere-ISO profile (default: ubuntu-24)
+  --infra-gitops-dir   Path to infra-gitops root (default: /home/vagrant/infra-gitops)
+  --infra-packer-dir   Path to infra-gitops packer module (overrides infra-gitops-dir/packer)
+  --validate-only      Run init+validate only
+  -h, --help           Show this help
+
+All unknown options are forwarded to:
+  infra-gitops/packer/build.sh
+EOF
+}
 
 for arg in "$@"; do
   case "$arg" in
     --env=*)
       ENV_NAME="${arg#*=}"
       ;;
+    --profile=*)
+      PROFILE_NAME="${arg#*=}"
+      ;;
+    --infra-gitops-dir=*)
+      INFRA_GITOPS_DIR="${arg#*=}"
+      ;;
+    --infra-packer-dir=*)
+      INFRA_PACKER_DIR="${arg#*=}"
+      ;;
     --validate-only)
       VALIDATE_ONLY="true"
       ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
     *)
-      echo "Usage: $0 [--env=<env>] [--validate-only]"
-      exit 1
+      PASSTHROUGH_ARGS+=("${arg}")
       ;;
   esac
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+if [[ -n "${INFRA_PACKER_DIR}" ]]; then
+  PACKER_MODULE_DIR="${INFRA_PACKER_DIR}"
+else
+  PACKER_MODULE_DIR="${INFRA_GITOPS_DIR}/packer"
+fi
+PACKER_BUILD_SCRIPT="${PACKER_MODULE_DIR}/build.sh"
+ACTION_NAME="build"
 
+[[ -x "${PACKER_BUILD_SCRIPT}" ]] || {
+  echo "[ERROR] Missing executable script: ${PACKER_BUILD_SCRIPT}" >&2
+  exit 1
+}
+
+if [[ "${VALIDATE_ONLY}" == "true" ]]; then
+  ACTION_NAME="validate"
+fi
+
+# Load overlay vars and export PKR_VAR_* expected by canonical packer module.
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/functions.sh"
+source "${REPO_ROOT}/overlays/base/scripts/functions.sh"
 load_overlay_vars "${ENV_NAME}"
 export_common_tool_env
 export_packer_vars
 
-PACKER_TEMPLATE_PATH="${REPO_ROOT}/${HAPROXY_PACKER_TEMPLATE_PATH}"
-ISO_VARS_FILE="${PACKER_TEMPLATE_PATH}/ubuntu.auto.pkrvars.hcl"
-ISO_DATASTORE_PATH="$(sed -n 's/^iso_datastore_path\\s*=\\s*\"\\(.*\\)\"/\\1/p' "${ISO_VARS_FILE}")"
-ISO_FILE_NAME="$(sed -n 's/^iso_file\\s*=\\s*\"\\(.*\\)\"/\\1/p' "${ISO_VARS_FILE}")"
-ISO_REMOTE_PATH="${ISO_DATASTORE_PATH}/${ISO_FILE_NAME}"
-
-VAR_FILES=(
-  "${REPO_ROOT}/overlays/base/packer/common.auto.pkrvars.hcl"
-  "${REPO_ROOT}/overlays/base/packer/ubuntu.auto.pkrvars.hcl"
-  "${REPO_ROOT}/overlays/base/packer/network.auto.pkrvars.hcl"
-  "${REPO_ROOT}/overlays/base/packer/linux-storage.auto.pkrvars.hcl"
+CMD=(
+  "${PACKER_BUILD_SCRIPT}"
+  "--builder=vsphere-iso"
+  "--profile=${PROFILE_NAME}"
+  "--action=${ACTION_NAME}"
 )
 
-if [[ -n "${HAPROXY_PACKER_OVERRIDE_FILE:-}" && -f "${REPO_ROOT}/${HAPROXY_PACKER_OVERRIDE_FILE}" ]]; then
-  VAR_FILES+=("${REPO_ROOT}/${HAPROXY_PACKER_OVERRIDE_FILE}")
-fi
-
-log_info "Pre-check: host/datacenter and ISO"
-
-if [[ -n "${PKR_VAR_vsphere_host:-}" ]]; then
-  if ! govc find / -type h | grep -F "/${PKR_VAR_vsphere_host}" >/dev/null; then
-    die "Host ${PKR_VAR_vsphere_host} not found in ESXi/vSphere inventory"
+if [[ -n "${HAPROXY_PACKER_OVERRIDE_FILE:-}" ]]; then
+  override_file="${HAPROXY_PACKER_OVERRIDE_FILE}"
+  if [[ "${override_file}" != /* ]]; then
+    override_file="${REPO_ROOT}/${override_file}"
   fi
-fi
-
-if [[ -n "${PKR_VAR_vsphere_datacenter:-}" ]]; then
-  if ! govc find / -type d | grep -F "/${PKR_VAR_vsphere_datacenter}" >/dev/null; then
-    die "Datacenter ${PKR_VAR_vsphere_datacenter} not found"
-  fi
-fi
-
-if ! govc datastore.ls "${ISO_REMOTE_PATH}" >/dev/null 2>&1; then
-  log_warn "ISO not found in datastore: ${ISO_REMOTE_PATH}"
-
-  if [[ -n "${ISO_LOCAL_PATH:-}" ]]; then
-    [[ -f "${ISO_LOCAL_PATH}" ]] || die "ISO_LOCAL_PATH does not exist: ${ISO_LOCAL_PATH}"
-    log_info "Uploading local ISO to datastore"
-    govc datastore.mkdir -p "${ISO_DATASTORE_PATH}" >/dev/null 2>&1 || true
-    govc datastore.upload "${ISO_LOCAL_PATH}" "${ISO_REMOTE_PATH}"
+  if [[ -f "${override_file}" ]]; then
+    CMD+=("--vars-file=${override_file}")
   else
-    die "Set ISO_LOCAL_PATH or upload the ISO manually to ${ISO_REMOTE_PATH}"
+    echo "[WARN] HAPROXY_PACKER_OVERRIDE_FILE not found: ${override_file}" >&2
   fi
 fi
 
-log_info "ISO confirmed at [${GOVC_DATASTORE}] ${ISO_REMOTE_PATH}"
-log_info "packer init ${PACKER_TEMPLATE_PATH}"
-packer init "${PACKER_TEMPLATE_PATH}"
+CMD+=("${PASSTHROUGH_ARGS[@]}")
 
-PACKER_VALIDATE_ARGS=(validate)
-for vf in "${VAR_FILES[@]}"; do
-  PACKER_VALIDATE_ARGS+=(-var-file "${vf}")
-done
-PACKER_VALIDATE_ARGS+=("${PACKER_TEMPLATE_PATH}")
-
-log_info "packer validate"
-packer "${PACKER_VALIDATE_ARGS[@]}"
-
-if [[ "${VALIDATE_ONLY}" == "false" ]]; then
-  PACKER_BUILD_ARGS=(build -force)
-  for vf in "${VAR_FILES[@]}"; do
-    PACKER_BUILD_ARGS+=(-var-file "${vf}")
-  done
-  PACKER_BUILD_ARGS+=("${PACKER_TEMPLATE_PATH}")
-
-  log_info "packer build"
-  packer "${PACKER_BUILD_ARGS[@]}"
-fi
+exec "${CMD[@]}"

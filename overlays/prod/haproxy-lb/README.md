@@ -13,7 +13,8 @@ balancer workflow. Shared automation lives under `overlays/base`.
 ## Overlay Responsibilities
 
 - Keep production topology overrides in `../scripts/vars.sh`.
-- Keep production-only Packer overrides in `packer/`.
+- Keep production-only Packer override files in `packer/` (consumed by external
+  `infra-gitops/packer` through the local wrapper).
 - Keep production-only Terraform override files in `terraform/`.
 
 ## Canonical Commands

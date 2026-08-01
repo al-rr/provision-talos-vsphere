@@ -27,6 +27,7 @@
 # @arg --talos-version version Talos version for schematic image tags.
 # @arg --cp-schematic-file path Control-plane schematic file path.
 # @arg --worker-schematic-file path Worker schematic file path.
+# @flag --force-generate Force regeneration of Talos config files.
 # @flag --no-update-ova Do not rewrite TALOS_OVA_PATH on refresh-schematics.
 # @flag --dry-run,-n Print actions without executing.
 # @flag --help,-h Show usage information.
@@ -52,7 +53,6 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 source "${REPO_ROOT}/overlays/base/scripts/functions.sh"
 
 ACTION=""
-ENV_NAME="lab"
 VARS_FILE=""
 LOCAL_VARS_FILE=""
 PROJECT_DIR=""
@@ -64,6 +64,7 @@ TALOS_VERSION=""
 CP_SCHEMATIC_FILE=""
 WORKER_SCHEMATIC_FILE=""
 UPDATE_OVA_FROM_SCHEMATIC="true"
+FORCE_GENERATE="false"
 DRY_RUN="false"
 
 usage() {
@@ -93,6 +94,7 @@ Options:
   --talos-version=<version>       Talos version for image tags (example: v1.12.4)
   --cp-schematic-file=<path>      CP schematic file (default: <project>/schematic.cp.yaml)
   --worker-schematic-file=<path>  Worker schematic file (default: <project>/schematic.worker.yaml, fallback schematic.yaml)
+  --force-generate                Force regeneration of Talos config files
   --no-update-ova                 Do not rewrite TALOS_OVA_PATH during refresh-schematics
   -n, --dry-run                   Print actions without executing
   -h, --help                      Show this help
@@ -146,6 +148,7 @@ parse_args() {
       --talos-version=*) TALOS_VERSION="${1#*=}"; shift ;;
       --cp-schematic-file=*) CP_SCHEMATIC_FILE="${1#*=}"; shift ;;
       --worker-schematic-file=*) WORKER_SCHEMATIC_FILE="${1#*=}"; shift ;;
+      --force-generate) FORCE_GENERATE="true"; shift ;;
       --no-update-ova) UPDATE_OVA_FROM_SCHEMATIC="false"; shift ;;
       -n|--dry-run) DRY_RUN="true"; shift ;;
       -h|--help) usage; exit 0 ;;
@@ -165,6 +168,15 @@ run_or_echo() {
     return 0
   fi
   "$@"
+}
+
+run_or_echo_cmd_string() {
+  local command="$1"
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log_info "[DRY-RUN] ${command}"
+    return 0
+  fi
+  bash -lc "${command}"
 }
 
 resolve_abs_path() {
@@ -352,6 +364,10 @@ create_project_scaffold() {
   local cluster_name="$2"
   local base_vars_path="${REPO_ROOT}/overlays/base/scripts/vars.sh"
   local project_abs=""
+  local cluster_bootstrap_cmd="${REPO_ROOT}/overlays/base/scripts/talos/cluster-bootstrap.sh"
+  local provision_cmd="${REPO_ROOT}/overlays/base/scripts/talos/provision-cluster.sh"
+  local sync_kubectl_cmd="${REPO_ROOT}/overlays/base/scripts/talos/sync-kubectl.sh"
+  local sync_talosctl_cmd="${REPO_ROOT}/overlays/base/scripts/talos/sync-talosctl.sh"
 
   if [[ "${project_dir}" = /* ]]; then
     project_abs="${project_dir}"
@@ -546,6 +562,14 @@ export TALOS_POST_BOOTSTRAP_HELM_OVERWRITE="true"
 # Generated artifacts and machine configs
 export TALOS_CONTROL_PLANE_CONFIG_PATH="\${PROJECT_DIR}/generated/controlplane.yaml"
 export TALOS_WORKER_CONFIG_PATH="\${PROJECT_DIR}/generated/worker.yaml"
+
+# Day-1 explicit action mapping contract
+export TALOS_DAY1_GENERATE_CMD="${cluster_bootstrap_cmd} --env=lab --mode=generate"
+export TALOS_DAY1_PROVISION_CMD="${provision_cmd} --env=lab create"
+export TALOS_DAY1_PREPARE_BOOTSTRAP_CMD="${cluster_bootstrap_cmd} --env=lab --mode=apply --apply-stage=pre"
+export TALOS_DAY1_APPLY_CONFIG_CMD="${cluster_bootstrap_cmd} --env=lab --mode=apply"
+export TALOS_DAY1_BOOTSTRAP_CMD="${cluster_bootstrap_cmd} --env=lab --mode=bootstrap"
+export TALOS_DAY1_SYNC_ACCESS_CMD="${sync_kubectl_cmd} --env=lab && ${sync_talosctl_cmd} --env=lab"
 EOF_VARS
     chmod +x "${project_abs}/vars.sh"
   fi
@@ -610,13 +634,20 @@ cluster.sh create-project --project-dir=${project_abs}
 
 1. Fill values in \`vars.sh\`.
 2. Optionally create \`vars.local.sh\` from \`vars.local.example.sh\`.
-3. (Optional) Refresh Talos images from schematics if you changed schematic files:
+3. Validate day-1 command mappings in \`vars.sh\`:
+   - \`TALOS_DAY1_GENERATE_CMD\`
+   - \`TALOS_DAY1_PROVISION_CMD\`
+   - \`TALOS_DAY1_PREPARE_BOOTSTRAP_CMD\`
+   - \`TALOS_DAY1_APPLY_CONFIG_CMD\`
+   - \`TALOS_DAY1_BOOTSTRAP_CMD\`
+   - \`TALOS_DAY1_SYNC_ACCESS_CMD\`
+4. (Optional) Refresh Talos images from schematics if you changed schematic files:
 
 \`\`\`bash
 cluster.sh refresh-schematics --project-dir=${project_abs} --talos-version=v1.12.4
 \`\`\`
 
-4. Execute:
+5. Execute:
 
 \`\`\`bash
 cluster.sh generate --project-dir=${project_abs}
@@ -631,6 +662,59 @@ EOF_README
   fi
 
   log_info "Project scaffold created: ${project_abs}"
+}
+
+resolve_action_command_var() {
+  local action="$1"
+  case "${action}" in
+    generate) printf '%s|%s\n' "TALOS_DAY1_GENERATE_CMD" "${TALOS_DAY1_GENERATE_CMD:-}" ;;
+    provision) printf '%s|%s\n' "TALOS_DAY1_PROVISION_CMD" "${TALOS_DAY1_PROVISION_CMD:-}" ;;
+    prepare-bootstrap) printf '%s|%s\n' "TALOS_DAY1_PREPARE_BOOTSTRAP_CMD" "${TALOS_DAY1_PREPARE_BOOTSTRAP_CMD:-}" ;;
+    apply-config) printf '%s|%s\n' "TALOS_DAY1_APPLY_CONFIG_CMD" "${TALOS_DAY1_APPLY_CONFIG_CMD:-}" ;;
+    bootstrap) printf '%s|%s\n' "TALOS_DAY1_BOOTSTRAP_CMD" "${TALOS_DAY1_BOOTSTRAP_CMD:-}" ;;
+    sync-access) printf '%s|%s\n' "TALOS_DAY1_SYNC_ACCESS_CMD" "${TALOS_DAY1_SYNC_ACCESS_CMD:-}" ;;
+    *) die "Unsupported mapped action: ${action}" ;;
+  esac
+}
+
+build_action_extra_args() {
+  local action="$1"
+  local extras=""
+
+  case "${action}" in
+    generate|prepare-bootstrap|apply-config|bootstrap)
+      [[ -n "${CLUSTER_NAME}" ]] && extras+=" --cluster-name=${CLUSTER_NAME}"
+      [[ -n "${GENERATED_DIR}" ]] && extras+=" --generated-dir=${GENERATED_DIR}"
+      if [[ "${action}" == "generate" && "${FORCE_GENERATE}" == "true" ]]; then
+        extras+=" --force-generate"
+      fi
+      [[ "${DRY_RUN}" == "true" ]] && extras+=" --dry-run"
+      ;;
+    provision)
+      [[ -n "${WORKER_COUNT}" ]] && extras+=" --worker-count=${WORKER_COUNT}"
+      ;;
+    sync-access)
+      [[ -n "${CLUSTER_NAME}" ]] && extras+=" --cluster-name=${CLUSTER_NAME}"
+      [[ "${DRY_RUN}" == "true" ]] && extras+=" --dry-run"
+      ;;
+  esac
+
+  printf '%s\n' "${extras}"
+}
+
+run_mapped_day1_action() {
+  local action="$1"
+  local mapping=""
+  local var_name=""
+  local command=""
+  local extra_args=""
+
+  mapping="$(resolve_action_command_var "${action}")"
+  var_name="${mapping%%|*}"
+  command="${mapping#*|}"
+  [[ -n "${command}" ]] || die "Missing command mapping for '${action}'. Set ${var_name} in project vars."
+  extra_args="$(build_action_extra_args "${action}")"
+  run_or_echo_cmd_string "${command}${extra_args}"
 }
 
 main() {
@@ -667,6 +751,16 @@ main() {
     export OVERLAY_LOCAL_VARS_FILE="${LOCAL_VARS_FILE}"
   fi
 
+  if [[ "${ACTION}" != "create-project" ]]; then
+    [[ -f "${VARS_FILE}" ]] || die "Vars file not found: ${VARS_FILE}"
+    # shellcheck disable=SC1090
+    source "${VARS_FILE}"
+    if [[ -n "${LOCAL_VARS_FILE}" && -f "${LOCAL_VARS_FILE}" ]]; then
+      # shellcheck disable=SC1090
+      source "${LOCAL_VARS_FILE}"
+    fi
+  fi
+
   case "${ACTION}" in
     create-project)
       [[ -n "${PROJECT_DIR}" ]] || die "--project-dir is required for create-project."
@@ -686,51 +780,16 @@ main() {
       refresh_schematics "${VARS_FILE}" "${project_abs}"
       return 0
       ;;
-    generate)
+    generate|provision|prepare-bootstrap|apply-config|bootstrap|sync-access)
       ensure_factory_installer_images_for_generate "${VARS_FILE}" "${project_abs}"
-      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${ENV_NAME}" "--mode=generate")
-      [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
-      [[ -n "${GENERATED_DIR}" ]] && cmd+=("--generated-dir=${GENERATED_DIR}")
-      [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
-      ;;
-    provision)
-      cmd=("${SCRIPT_DIR}/provision-cluster.sh" "--env=${ENV_NAME}")
-      [[ -n "${WORKER_COUNT}" ]] && cmd+=("--worker-count=${WORKER_COUNT}")
-      cmd+=("create")
-      ;;
-    prepare-bootstrap)
-      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${ENV_NAME}" "--mode=apply" "--apply-stage=pre")
-      [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
-      [[ -n "${GENERATED_DIR}" ]] && cmd+=("--generated-dir=${GENERATED_DIR}")
-      [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
-      ;;
-    apply-config)
-      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${ENV_NAME}" "--mode=apply")
-      [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
-      [[ -n "${GENERATED_DIR}" ]] && cmd+=("--generated-dir=${GENERATED_DIR}")
-      [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
-      ;;
-    bootstrap)
-      cmd=("${SCRIPT_DIR}/cluster-bootstrap.sh" "--env=${ENV_NAME}" "--mode=bootstrap")
-      [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
-      [[ -n "${GENERATED_DIR}" ]] && cmd+=("--generated-dir=${GENERATED_DIR}")
-      [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
+      run_mapped_day1_action "${ACTION}"
+      return 0
       ;;
     apply-post-bootstrap)
       [[ -n "${PROJECT_DIR}" ]] || die "--project-dir is required for apply-post-bootstrap."
       cmd=("${SCRIPT_DIR}/apply-post-bootstrap.sh" "--project-dir=${project_abs}")
       [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
       [[ -n "${ADDONS_LIST}" ]] && cmd+=("--addons=${ADDONS_LIST}")
-      [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
-      ;;
-    sync-access)
-      cmd=("${SCRIPT_DIR}/sync-kubectl.sh" "--env=${ENV_NAME}")
-      [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
-      [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
-      run_or_echo "${cmd[@]}"
-
-      cmd=("${SCRIPT_DIR}/sync-talosctl.sh" "--env=${ENV_NAME}")
-      [[ -n "${CLUSTER_NAME}" ]] && cmd+=("--cluster-name=${CLUSTER_NAME}")
       [[ "${DRY_RUN}" == "true" ]] && cmd+=("--dry-run")
       ;;
   esac
