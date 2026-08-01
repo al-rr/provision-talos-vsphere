@@ -37,6 +37,10 @@ Install the tools required by the selected workflow (`bash`, `git`, `talosctl`, 
 
 - Before infrastructure changes, run shell validation (`make lint-sh`) and use each command's dry-run mode where available.
 - Generated configuration, kubeconfig, talosconfig, and secrets remain local under `generated/` and must not be staged.
+- Generated Talos machine configuration and client-access files written directly
+  into a cluster project directory are also local-only. See
+  [Credential containment](credential-containment.md) before regenerating or
+  rotating access material.
 - The supported HAProxy target is two nodes with a VIP. Re-check the current HA/VIP automation status in `agenda.md` before a production rollout.
 - The local lab is an integration and validation environment, not the production source of truth. Keep environment values in the appropriate overlay and local override file.
 
