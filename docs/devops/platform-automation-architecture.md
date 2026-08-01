@@ -69,11 +69,17 @@ Use the documents in this order when repository behavior is unclear:
 
 ## Tool Ownership
 
-- HAProxy VM lifecycle: `govc` and/or `Terraform`
+- HAProxy VM lifecycle: `govc` + Ansible active; Terraform draft/future-facing
 - HAProxy service configuration: `Ansible`
-- Talos VM lifecycle: `Terraform`
+- Talos VM lifecycle: `govc` active (via `cluster.sh provision`); Terraform is
+  the target provisioner, not yet wired into the day-1 flow
 - Talos secrets and generated machine configuration: `talosctl`
+- Generic Talos day-1/day-2 lifecycle: owned by `talos-toolchain`. The copies
+  under `overlays/base/scripts/talos/` are transitional compatibility only,
+  pending migration to the `cluster-toolchain.sh` wrapper
 - Image build workflow: optional and external (`infra-gitops/packer`)
+- Keepalived: role exists under `overlays/base/ansible/roles/keepalived/` but
+  is not referenced by the HAProxy playbook yet
 
 The current target topology for the load balancer layer is `2x HAProxy + VIP`.
 Do not describe the HAProxy path as fully complete until VIP automation exists.
@@ -117,10 +123,15 @@ scripts, not standalone operator workflows.
 
 ### Talos
 
-- Target provisioner: `Terraform`
+- Current active path: `govc`, driven by `overlays/base/scripts/talos/cluster.sh`
+  (`provision` action calls `provision-cluster.sh`)
+- Target provisioner: `Terraform`, not yet invoked by the day-1 flow — do not
+  describe it as active
 - Keep generated machine configuration outside Terraform state
 - Support standalone ESXi first and keep vCenter compatibility explicit when a
   workflow depends on cluster-only constructs
+- Generic Talos day-1/day-2 lifecycle behavior belongs to `talos-toolchain`;
+  local scripts here are transitional compatibility copies
 
 ## Relationship To infra-gitops
 

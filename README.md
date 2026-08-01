@@ -7,11 +7,26 @@ overrides and bootstrap assets.
 
 ## Purpose
 
+- This repository is the VMware/vSphere infrastructure adapter: it provisions
+  the VMs and load-balancer layer that Talos and GitOps run on. Real
+  provisioning and VIP validation are deferred to the Windows/VMware
+  milestone. The planned direction is for local/macOS Talos lifecycle work to
+  move to a first-class local backend in `talos-toolchain`; that backend is
+  not implemented yet (tracked as a later toolchain iteration), so this
+  repository is not a substitute local-first path in the meantime.
 - Validate the operating model on standalone ESXi first.
 - Keep the production path aligned with the same base automation.
-- Use `govc + Ansible` for the current HAProxy path.
-- Use `Terraform + talosctl` for the Talos VM lifecycle and generated machine
-  configuration flow.
+- Use `govc + Ansible` for the current HAProxy path; Terraform/Packer for
+  HAProxy are draft/future-facing until VIP automation is closed.
+- Use `govc` (via `cluster.sh provision`) for the current Talos VM lifecycle;
+  Terraform is the target provisioner and is not yet wired into the day-1
+  flow. Keep `talosctl` outside Terraform state for secrets and generated
+  machine configuration either way.
+- Generic Talos day-1/day-2 lifecycle is owned by `talos-toolchain`. The local
+  scripts under `overlays/base/scripts/talos/` (`cluster.sh`,
+  `talos-gitops.sh`, and related helpers) are transitional compatibility
+  copies pending migration; prefer `cluster-toolchain.sh`, which forwards to
+  `talos-toolchain`, for new work.
 
 ## Source Of Truth
 
@@ -72,6 +87,14 @@ VIP automation gap is closed.
 
 ### Talos
 
+Current active path (govc, invoked through the day-1 `cluster.sh` lifecycle):
+
+```bash
+./overlays/base/scripts/talos/cluster.sh provision --project-dir=<project-dir>
+```
+
+Target/future path (Terraform, not yet wired into the day-1 flow):
+
 ```bash
 ./overlays/base/scripts/talos-terraform.sh --env=prod
 ./overlays/base/scripts/talos-terraform.sh --env=prod --apply
@@ -79,7 +102,9 @@ VIP automation gap is closed.
 
 ## Architecture Notes
 
-- HAProxy target topology is `2x HAProxy + VIP`.
+- HAProxy target topology is `2x HAProxy + VIP`. The Keepalived Ansible role
+  exists (`overlays/base/ansible/roles/keepalived/`) but is not yet included
+  by the HAProxy playbook — VIP failover is not wired in.
 - The Kubernetes endpoint is `https://<endpoint>:6443`.
 - `talosctl` version must be compatible with the Talos cluster version (same major/minor; preferably same exact tag).
 - Talos API administrative reachability on `:50000` must be documented

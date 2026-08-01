@@ -29,9 +29,21 @@ Install the tools required by the selected workflow (`bash`, `git`, `talosctl`, 
 
 1. In the lab checkout, copy `vars.local.example.sh` to `vars.local.sh` for the selected project (`talos-dev` or `talos-smoke`) and supply host-specific credentials, topology, and endpoints. Never commit this file.
 2. Review the tracked `vars.sh`, patches, and schematics; all project-relative paths derive from the project/workspace location.
-3. Run the day-1 lifecycle with `cluster.sh` or the transition wrapper `cluster-toolchain.sh`: `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`, and `sync-access`.
+3. Run the day-1 lifecycle with `cluster.sh` (local, transitional compatibility copy) or the wrapper `cluster-toolchain.sh`, which forwards to the canonical `talos-toolchain` `cluster.sh`: `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`, and `sync-access`. Generic Talos lifecycle behavior is owned by `talos-toolchain`; prefer `cluster-toolchain.sh` for new work.
 4. Apply the post-bootstrap baseline only after cluster access works. It reads platform manifests from the sibling GitOps checkout.
 5. Use Argo CD and the GitOps repository for day-2 application changes.
+
+## Repository Boundary
+
+This repository is the VMware/vSphere infrastructure adapter: `govc`/Terraform
+provisioning, HAProxy, and environment topology. Generic, environment-agnostic
+Talos lifecycle work belongs to `talos-toolchain`. The planned direction is
+for local/macOS day-1 iteration to run through a first-class local backend in
+`talos-toolchain`; that backend is not implemented yet (tracked as a later
+toolchain iteration), so treat it as the target, not a currently available
+path. Real vSphere/ESXi provisioning and VIP validation here are deferred to
+the Windows/VMware milestone — do not treat the Terraform paths for HAProxy
+or Talos as active until that milestone wires them in.
 
 ## Validation and Known Gaps
 
@@ -41,6 +53,12 @@ Install the tools required by the selected workflow (`bash`, `git`, `talosctl`, 
   into a cluster project directory are also local-only. See
   [Credential containment](credential-containment.md) before regenerating or
   rotating access material.
+- HAProxy VM lifecycle is `govc + Ansible` (active); Terraform/Packer for
+  HAProxy are draft/future-facing until VIP automation is closed.
+- Talos VM lifecycle is `govc` (active, via `cluster.sh provision`); Terraform
+  is the target provisioner and is not yet wired into the day-1 flow.
+- The Keepalived Ansible role exists (`overlays/base/ansible/roles/keepalived/`)
+  but is not yet included by the HAProxy playbook — VIP failover is not wired in.
 - The supported HAProxy target is two nodes with a VIP. Re-check the current HA/VIP automation status in `agenda.md` before a production rollout.
 - The local lab is an integration and validation environment, not the production source of truth. Keep environment values in the appropriate overlay and local override file.
 
