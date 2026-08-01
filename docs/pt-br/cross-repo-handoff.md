@@ -37,6 +37,10 @@ Instale as ferramentas do fluxo escolhido (`bash`, `git`, `talosctl`, `kubectl`,
 
 - Antes de alterar infraestrutura, execute a validacao de shell (`make lint-sh`) e use o modo dry-run quando houver suporte.
 - Configuracao gerada, kubeconfig, talosconfig e secrets ficam locais em `generated/` e nunca devem ser adicionados ao indice Git.
+- Configuracoes geradas de maquina Talos e arquivos de acesso gravados
+  diretamente no diretorio de um projeto de cluster tambem sao locais. Consulte
+  [Contencao de credenciais](credential-containment.md) antes de regenerar ou
+  rotacionar o material de acesso.
 - O alvo de HAProxy e formado por dois nos com VIP. Confirme o estado atual da automacao de HA/VIP em `agenda.md` antes de um rollout produtivo.
 - O laboratorio local e ambiente de integracao e validacao, nao a fonte de verdade de producao. Mantenha valores por ambiente no overlay e no override local adequados.
 

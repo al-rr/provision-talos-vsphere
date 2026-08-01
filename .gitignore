@@ -21,6 +21,14 @@ overlays/lab/talos/*/generated/
 overlays/prod/talos/*/generated/
 overlays/lab/talos/*/bootstrap-ips.txt
 overlays/prod/talos/*/bootstrap-ips.txt
+# Generated Talos and Kubernetes access artifacts can also be written directly
+# into a cluster project directory. Keep templates and schematics trackable.
+overlays/*/talos/**/controlplane.yaml
+overlays/*/talos/**/worker.yaml
+overlays/*/talos/**/talosconfig
+overlays/*/talos/**/kubeconfig
+overlays/*/talos/**/alternative-kubeconfig
+overlays/base/ansible/overlays/*/talos/**/talosconfig
 *.tfstate
 *.tfstate.backup
 *.iso
