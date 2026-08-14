@@ -66,7 +66,10 @@
   `overlays/<env>/scripts/vars.sh` automatically when `--vars-file` is not
   explicitly provided, unless the module has already migrated to a
   project-dir-first contract.
-- For Talos cluster lifecycle orchestration (`overlays/base/scripts/talos/cluster.sh`):
+- For Talos cluster lifecycle orchestration, the canonical entrypoint is
+  `overlays/base/scripts/talos/cluster-toolchain.sh`, which forwards to the
+  `talos-toolchain` checkout's `cluster.sh`
+  (`overlays/base/scripts/talos/cluster.sh` here is a deprecated shim for it):
   - `--project-dir` is the primary contract.
   - `--env` is removed from this entrypoint.
   - `--vars-file` remains available for advanced/manual use.

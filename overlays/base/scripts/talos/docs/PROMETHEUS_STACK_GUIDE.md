@@ -17,7 +17,7 @@ this project.
 Install only prometheus-stack:
 
 ```bash
-./overlays/base/scripts/talos/talos-gitops.sh install-addon \
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-addon \
   --addon=prometheus-stack \
   --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
@@ -26,7 +26,7 @@ Install only prometheus-stack:
 Install as part of a platform run:
 
 ```bash
-./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm \
   --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["prometheus-stack"]'

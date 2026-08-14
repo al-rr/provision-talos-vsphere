@@ -158,8 +158,8 @@ Talos lifecycle command set.
 Example:
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh create-project --project-dir=overlays/lab/talos/talos-dev
-./overlays/base/scripts/talos/cluster.sh generate --project-dir=overlays/lab/talos/talos-dev
+./overlays/base/scripts/talos/cluster-toolchain.sh create-project --project-dir=overlays/lab/talos/talos-dev
+./overlays/base/scripts/talos/cluster-toolchain.sh generate --project-dir=overlays/lab/talos/talos-dev
 ```
 
 ### `phase-cluster-ready.sh`
@@ -249,13 +249,13 @@ Optional baseline extension:
 Command:
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos
+./overlays/base/scripts/talos/cluster-toolchain.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos
 ```
 
 With explicit list:
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos --addons='["cilium","longhorn"]'
+./overlays/base/scripts/talos/cluster-toolchain.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos --addons='["cilium","longhorn"]'
 ```
 
 Important:

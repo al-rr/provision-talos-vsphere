@@ -22,7 +22,7 @@ Documentar como o cert-manager e instalado e operado neste projeto.
 Instalar somente cert-manager:
 
 ```bash
-./overlays/base/scripts/talos/talos-gitops.sh install-addon \
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-addon \
   --addon=cert-manager \
   --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
@@ -31,7 +31,7 @@ Instalar somente cert-manager:
 Instalar como parte de um run de plataforma:
 
 ```bash
-./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm \
   --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["cert-manager"]'

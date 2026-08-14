@@ -23,16 +23,16 @@ e como atualizar values com seguranca apos a implantacao inicial.
 - Overrides Helm:
   - `overlays/lab/talos/talos/helm/longhorn/values.yaml`
 - Orquestracao baseline day-1:
-  - `overlays/base/scripts/talos/cluster.sh apply-post-bootstrap`
+  - `overlays/base/scripts/talos/cluster-toolchain.sh apply-post-bootstrap`
 - Orquestracao GitOps day-2:
-  - `overlays/base/scripts/talos/talos-gitops.sh install-platform-helm`
+  - `overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm`
 
 ## Instalar Ou Atualizar Longhorn
 
 Modo baseline day-1 (a partir do projeto de cluster):
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh apply-post-bootstrap \
+./overlays/base/scripts/talos/cluster-toolchain.sh apply-post-bootstrap \
   --project-dir=overlays/lab/talos/talos \
   --addons='["longhorn"]'
 ```
@@ -40,7 +40,7 @@ Modo baseline day-1 (a partir do projeto de cluster):
 Modo GitOps day-2 (a partir da fonte de manifests):
 
 ```bash
-./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm \
   --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["longhorn"]'

@@ -6,9 +6,11 @@ Operational context for Codex CLI sessions in this workspace.
 
 - `talos-vsphere-lab`:
   - Day-1 toolchain and cluster lifecycle automation.
-  - Main entrypoints:
-    - `overlays/base/scripts/talos/cluster.sh`
-    - `overlays/base/scripts/talos/talos-gitops.sh`
+  - Main entrypoints (delegate to the `talos-toolchain` checkout):
+    - `overlays/base/scripts/talos/cluster-toolchain.sh`
+    - `overlays/base/scripts/talos/talos-gitops-toolchain.sh`
+  - `cluster.sh`/`talos-gitops.sh` are deprecated compatibility shims for the
+    two entrypoints above.
 - `talos-vsphere-gitops`:
   - Day-2 GitOps manifests (helm + argocd) per environment.
   - Current active layout: `environments/lab/...`

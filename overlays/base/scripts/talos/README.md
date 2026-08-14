@@ -12,17 +12,29 @@ documented in the guides linked below.
 `install.sh` is a compatibility wrapper and delegates to
 `infra-gitops/scripts/talos/install.sh`.
 
-## Toolchain Transition Wrappers
+## Canonical Talos Lifecycle: cluster-toolchain.sh / talos-gitops-toolchain.sh
 
-For migration tests, this module provides wrappers that forward to an external
-`talos-toolchain` checkout:
+Generic Talos day-1/day-2 lifecycle behavior is owned by `talos-toolchain`,
+not by this repository. This module's canonical entrypoints forward to the
+external `talos-toolchain` checkout:
 
 - `cluster-toolchain.sh` -> `<toolchain>/scripts/talos/cluster.sh`
 - `talos-gitops-toolchain.sh` -> `<toolchain>/scripts/talos/talos-gitops.sh`
 
+`cluster.sh` and `talos-gitops.sh` in this directory are deprecated
+compatibility shims that print a warning and forward every argument to the
+wrappers above unchanged. They exist only so a caller that has not migrated
+yet keeps working; new usage should call `cluster-toolchain.sh` /
+`talos-gitops-toolchain.sh` directly. They will be removed once no
+documented workflow in this repository references them.
+
 Default toolchain location:
 
-- `/home/vagrant/talos-toolchain`
+- `cluster-toolchain.sh`: sibling checkout (`../talos-toolchain` relative to
+  this repository root), matching the standard `talos-projects` workspace
+  layout.
+- `talos-gitops-toolchain.sh`: `/home/vagrant/talos-toolchain` (lab
+  controller path).
 
 Override with:
 
@@ -40,16 +52,16 @@ Examples:
 
 | Script                                     | Purpose                                                  | Notes                                                                         |
 | ------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `cluster.sh`                               | Unified day-1 cluster lifecycle entrypoint               | Actions: `create-project`, `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`, `apply-post-bootstrap`, `sync-access`, `refresh-schematics` |
-| `talos-gitops.sh`                          | Unified day-2 GitOps operations entrypoint               | Installs platform helms, deploys Argo CD root app, configures cluster tools   |
-| `cluster-toolchain.sh`                     | Delegate day-1 actions to external `talos-toolchain`     | Transition wrapper for migration testing                                       |
-| `talos-gitops-toolchain.sh`                | Delegate day-2 actions to external `talos-toolchain`     | Transition wrapper for migration testing                                       |
+| `cluster-toolchain.sh`                     | Canonical day-1 entrypoint: delegates to `talos-toolchain`'s `cluster.sh` | Actions: `create-project`, `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`, `apply-post-bootstrap`, `sync-access`, `refresh-schematics` |
+| `talos-gitops-toolchain.sh`                | Canonical day-2 entrypoint: delegates to `talos-toolchain`'s `talos-gitops.sh` | Installs platform helms, deploys Argo CD root app, configures cluster tools   |
+| `cluster.sh`                               | Deprecated shim for `cluster-toolchain.sh`               | Forwards all arguments unchanged; prints a deprecation warning; kept for the rollback window |
+| `talos-gitops.sh`                          | Deprecated shim for `talos-gitops-toolchain.sh`          | Forwards all arguments unchanged; prints a deprecation warning; kept for the rollback window |
 | `install.sh`                               | Install or upgrade `talosctl`                            | Local or remote execution                                                     |
 | `provision-single-node.sh`                 | Provision a non-HA Talos node                            | Thin wrapper over `overlays/base/scripts/talos/govc/provision-single-node.sh` |
 | `provision-cluster.sh`                     | Provision a Talos cluster topology                       | Thin wrapper over `overlays/base/scripts/talos/govc/provision-cluster.sh`     |
-| `cluster-bootstrap.sh`                     | Generate configs, apply configs, and bootstrap a cluster | Used after VMs are provisioned; reconciles HAProxy only in pre-stage (`prepare-bootstrap`) and validates VIP kube-api |
-| `phase-cluster-ready.sh`                  | Phase 1 orchestration: provision + bootstrap + validation | Includes kubeconfig artifact generation and CNI/proxy runtime checks           |
-| `phase-network-bringup.sh`                | Phase 2 orchestration: render, validate, and install addon via Helm | Reusable for `--addon=cilium` and `--addon=argocd`                            |
+| `cluster-bootstrap.sh`                     | Generate configs, apply configs, and bootstrap a cluster | Superseded by `cluster-toolchain.sh` for the standard flow; retained only because `docs/HOWTO_ADD_WORKERS.md` still calls it directly for a targeted `--worker-ips=<ips>` re-apply that `cluster-toolchain.sh apply-config` does not expose |
+| `phase-cluster-ready.sh`                  | Phase 1 orchestration: provision + bootstrap + validation | Retained: still the implementation behind `cluster-bootstrap.sh` above, not a standalone toolchain duplicate to remove |
+| `phase-network-bringup.sh`                | Phase 2 orchestration: render, validate, and install addon via Helm | Retained: still the implementation behind `cilium.sh`, `argocd.sh`, `longhorn.sh`, `cert-manager.sh`, `prometheus-stack.sh` below, none of which have a `talos-toolchain` equivalent (only bulk `apply-post-bootstrap --addons=[...]` exists there) |
 | `cilium.sh`                               | Reusable Cilium lifecycle entrypoint                      | Wrapper over `phase-network-bringup.sh --addon=cilium`                         |
 | `argocd.sh`                               | Reusable Argo CD lifecycle entrypoint                     | Wrapper over `phase-network-bringup.sh --addon=argocd`                         |
 | `longhorn.sh`                             | Reusable Longhorn lifecycle entrypoint                    | Wrapper over `phase-network-bringup.sh --addon=longhorn`                       |
@@ -66,7 +78,7 @@ Examples:
 The Talos module is split into two layers:
 
 - Talos operations:
-  - `cluster.sh`
+  - `cluster-toolchain.sh` (canonical; `cluster.sh` is a deprecated shim for it)
   - `install.sh`
   - `cluster-bootstrap.sh`
   - `phase-cluster-ready.sh`
@@ -94,11 +106,12 @@ for `kubectl` and `talosctl` (disable with `--skip-sync-access`).
 
 ## Unified Entry Point
 
-Use `cluster.sh` as the project-oriented orchestrator with one stable CLI
-contract:
+Use `cluster-toolchain.sh` as the project-oriented orchestrator with one
+stable CLI contract — the same contract `talos-toolchain/scripts/talos/cluster.sh`
+defines, since this wrapper forwards to it directly:
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh <action> [options]
+./overlays/base/scripts/talos/cluster-toolchain.sh <action> [options]
 ```
 
 Supported actions:
@@ -113,19 +126,12 @@ Supported actions:
 - `sync-access`
 - `refresh-schematics`
 
-Day-1 mapped command contract:
-
-- `generate` -> `TALOS_DAY1_GENERATE_CMD`
-- `provision` -> `TALOS_DAY1_PROVISION_CMD`
-- `prepare-bootstrap` -> `TALOS_DAY1_PREPARE_BOOTSTRAP_CMD`
-- `apply-config` -> `TALOS_DAY1_APPLY_CONFIG_CMD`
-- `bootstrap` -> `TALOS_DAY1_BOOTSTRAP_CMD`
-- `sync-access` -> `TALOS_DAY1_SYNC_ACCESS_CMD`
-
-Those variables are created by `create-project` in each project `vars.sh`.
-`cluster.sh` executes these mappings directly (no internal fallback path for
-those actions). If a mapping is missing/empty, execution fails with a clear
-error.
+There is no local command-hook indirection (no per-project `TALOS_DAY1_*`
+mapped-command variables): `cluster-toolchain.sh` forwards every action
+straight to `talos-toolchain`'s own implementation of each action. That
+older indirection existed only in the now-deprecated local `cluster.sh` shim
+and was a deliberate roadmap decision not to port back into
+`talos-toolchain`.
 
 Recommended execution order:
 
@@ -169,26 +175,30 @@ Why `apply-post-bootstrap` exists:
 - `apply-post-bootstrap` prints follow-up `kubectl` watch commands because immediate validation snapshots can still show transient `Pending/NotReady`.
 - It can automatically sync day-1 helm manifests into `<project-dir>/helm` from the source declared in project vars.
 - This separation keeps strong cohesion:
-  - Talos lifecycle in `cluster-bootstrap.sh`
-  - Cluster baseline addons in `phase-network-bringup.sh` wrappers
-  - Day-2 GitOps operations in `talos-gitops.sh`
-- In day-2, `talos-gitops.sh install-platform-helm` excludes `cilium` by default.
-  This protects the day-1 CNI baseline from accidental broad reapply; use
-  `--addons` and `--exclude-addons` to control exactly what should run.
-  Use `talos-gitops.sh install-addon --addon=<name>` for one-addon iterative
-  tests without applying the whole platform set.
+  - Talos lifecycle delegated to `talos-toolchain` via `cluster-toolchain.sh`
+  - Cluster baseline addons in `phase-network-bringup.sh` wrappers (local, no
+    toolchain equivalent for standalone per-addon apply)
+  - Day-2 GitOps operations delegated to `talos-toolchain` via
+    `talos-gitops-toolchain.sh`
+- In day-2, `talos-gitops-toolchain.sh install-platform-helm` excludes
+  `cilium` by default. This protects the day-1 CNI baseline from accidental
+  broad reapply; use `--addons` and `--exclude-addons` to control exactly
+  what should run. Use `talos-gitops-toolchain.sh install-addon --addon=<name>`
+  for one-addon iterative tests without applying the whole platform set.
   System exclusions are always enforced and merged with user exclusions.
-- In day-2, `talos-gitops.sh` requires `--kube-context=<name>` to ensure
-  commands run against the intended cluster context.
+- In day-2, `talos-gitops-toolchain.sh` requires `--kube-context=<name>` to
+  ensure commands run against the intended cluster context.
 
 Important:
 
-- `cluster.sh` reuses existing scripts. It does not replace module internals.
+- `cluster-toolchain.sh` reuses `talos-toolchain`'s implementation; it does
+  not replace or duplicate module internals.
 - Preferred mode is `--project-dir=<path>`.
 - `--vars-file=<path>` remains available for advanced/manual flows.
-- `--env` is removed from `cluster.sh`; use `--project-dir` instead.
-- `apply-post-bootstrap` is still a first-class day-1 action and remains
-  separate from the mapped Talos lifecycle actions above.
+- `--env` is removed from the underlying `cluster.sh` contract; use
+  `--project-dir` instead.
+- `apply-post-bootstrap` is still a first-class day-1 action, dispatched
+  through `cluster-toolchain.sh` like every other action above.
 
 ## Optional Global Command
 
@@ -198,10 +208,10 @@ If you want to run the CLIs from any directory, create symlinks in
 Create/update symlink:
 
 ```bash
-sudo ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster.sh /usr/local/bin/talos-cluster
-sudo ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops.sh /usr/local/bin/talos-gitops
-sudo chmod +x /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster.sh
-sudo chmod +x /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops.sh
+sudo ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster-toolchain.sh /usr/local/bin/talos-cluster
+sudo ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops-toolchain.sh /usr/local/bin/talos-gitops
+sudo chmod +x /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster-toolchain.sh
+sudo chmod +x /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops-toolchain.sh
 ```
 
 Validate:
@@ -222,8 +232,8 @@ Without `sudo` (user-local path):
 
 ```bash
 mkdir -p ~/.local/bin
-ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster.sh ~/.local/bin/talos-cluster
-ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops.sh ~/.local/bin/talos-gitops
+ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/cluster-toolchain.sh ~/.local/bin/talos-cluster
+ln -sf /home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/talos-gitops-toolchain.sh ~/.local/bin/talos-gitops
 # ensure ~/.local/bin is in PATH
 ```
 

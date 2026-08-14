@@ -74,9 +74,15 @@ Use the documents in this order when repository behavior is unclear:
 - Talos VM lifecycle: `govc` active (via `cluster.sh provision`); Terraform is
   the target provisioner, not yet wired into the day-1 flow
 - Talos secrets and generated machine configuration: `talosctl`
-- Generic Talos day-1/day-2 lifecycle: owned by `talos-toolchain`. The copies
-  under `overlays/base/scripts/talos/` are transitional compatibility only,
-  pending migration to the `cluster-toolchain.sh` wrapper
+- Generic Talos day-1/day-2 lifecycle: owned by `talos-toolchain`. The
+  active path is `cluster-toolchain.sh` / `talos-gitops-toolchain.sh`, which
+  forward to the `talos-toolchain` checkout. `cluster.sh` and
+  `talos-gitops.sh` under `overlays/base/scripts/talos/` are deprecated
+  compatibility shims for that path, kept only for the rollback window.
+  `phase-network-bringup.sh`/`phase-cluster-ready.sh` and the standalone
+  addon entrypoints built on them (`cilium.sh`, `argocd.sh`, `longhorn.sh`,
+  `cert-manager.sh`, `prometheus-stack.sh`) are not toolchain duplicates —
+  they provide standalone per-addon lifecycle that `talos-toolchain` does not
 - Image build workflow: optional and external (`infra-gitops/packer`)
 - Keepalived: role exists under `overlays/base/ansible/roles/keepalived/` but
   is not referenced by the HAProxy playbook yet
@@ -123,15 +129,18 @@ scripts, not standalone operator workflows.
 
 ### Talos
 
-- Current active path: `govc`, driven by `overlays/base/scripts/talos/cluster.sh`
-  (`provision` action calls `provision-cluster.sh`)
+- Current active path: `govc`, driven by
+  `overlays/base/scripts/talos/cluster-toolchain.sh` (`provision` action
+  calls `provision-cluster.sh`)
 - Target provisioner: `Terraform`, not yet invoked by the day-1 flow — do not
   describe it as active
 - Keep generated machine configuration outside Terraform state
 - Support standalone ESXi first and keep vCenter compatibility explicit when a
   workflow depends on cluster-only constructs
 - Generic Talos day-1/day-2 lifecycle behavior belongs to `talos-toolchain`;
-  local scripts here are transitional compatibility copies
+  `cluster-toolchain.sh`/`talos-gitops-toolchain.sh` are the active
+  delegation path; the local `cluster.sh`/`talos-gitops.sh` copies are
+  deprecated shims, not independent implementations
 
 ## Relationship To infra-gitops
 
