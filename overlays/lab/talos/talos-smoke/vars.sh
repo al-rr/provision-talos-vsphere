@@ -32,7 +32,12 @@ export TALOS_WORKER_INSTALLER_IMAGE="factory.talos.dev/vmware-installer/c5ecff40
 export TALOS_CONTROL_PLANE_CONFIG_PATH="${PROJECT_DIR}/generated/controlplane.yaml"
 export TALOS_WORKER_CONFIG_PATH="${PROJECT_DIR}/generated/worker.yaml"
 
-# Day-1 action commands (must be set by your environment integration)
+# Day-1 action commands (legacy; not read by the active cluster.sh/
+# cluster-toolchain.sh dispatch path as of Iteration 10 — cluster.sh is now
+# a pure forwarding shim to cluster-toolchain.sh and has no command-hook
+# indirection of its own. Kept as historical record of this project's
+# generation-time config; not evidence of a still-used workflow. See
+# overlays/base/scripts/talos/docs/CLUSTER_GUIDE.md.)
 export TALOS_DAY1_GENERATE_CMD="${LAB_REPO_ROOT}/overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=generate"
 export TALOS_DAY1_PROVISION_CMD="${LAB_REPO_ROOT}/overlays/base/scripts/talos/provision-cluster.sh --env=lab create"
 export TALOS_DAY1_PREPARE_BOOTSTRAP_CMD="${LAB_REPO_ROOT}/overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=apply --apply-stage=pre"
@@ -40,7 +45,9 @@ export TALOS_DAY1_APPLY_CONFIG_CMD="${LAB_REPO_ROOT}/overlays/base/scripts/talos
 export TALOS_DAY1_BOOTSTRAP_CMD="${LAB_REPO_ROOT}/overlays/base/scripts/talos/cluster-bootstrap.sh --env=lab --mode=bootstrap"
 export TALOS_DAY1_SYNC_ACCESS_CMD="${LAB_REPO_ROOT}/overlays/base/scripts/talos/sync-kubectl.sh --env=lab && ${LAB_REPO_ROOT}/overlays/base/scripts/talos/sync-talosctl.sh --env=lab"
 
-# Day-1 baseline addons
+# Day-1 baseline addons (TALOS_DAY1_REQUIRE_CILIUM/MANIFEST_ROOT_DIR/
+# KUBE_CONTEXT below: same legacy/unread status as the TALOS_DAY1_*_CMD
+# block above)
 export TALOS_CLUSTER_BASELINE_ADDONS='["cilium"]'
 export TALOS_DAY1_REQUIRE_CILIUM="true"
 export TALOS_DAY1_MANIFEST_ROOT_DIR="${WORKSPACE_ROOT}/talos-vsphere-gitops/environments/lab"

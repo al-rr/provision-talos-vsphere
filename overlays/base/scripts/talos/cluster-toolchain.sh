@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # @file cluster-toolchain.sh
-# @brief Run day-1 actions using external talos-toolchain.
+# @brief Canonical day-1 entrypoint: run actions using external talos-toolchain.
 # @description
 #   Thin wrapper that forwards all arguments to talos-toolchain cluster.sh.
-#   This allows migration testing without replacing the current local cluster.sh.
+#   This is the active, canonical day-1 entrypoint for this repository;
+#   the local cluster.sh is a deprecated compatibility shim for it.
 #
 # @arg action string Any action supported by toolchain cluster.sh.
 # @arg options string Any options supported by toolchain cluster.sh.

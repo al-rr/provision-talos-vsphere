@@ -12,15 +12,17 @@ Se voce quiser um fluxo unico canonico de comandos para o day-1 do lab, use:
 
 - [LAB_DAY1_RUNBOOK.pt-br.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/pt-br/LAB_DAY1_RUNBOOK.pt-br.md)
 
-## Entrypoints De Execucao (Transicao)
+## Entrypoints De Execucao (Canonico)
 
-Recomendacao atual durante a migracao para toolchain:
+Entrypoints canonicos ativos:
 
 - Day-1: usar `cluster-toolchain.sh`
 - Day-2: usar `talos-gitops-toolchain.sh`
 
 Esses wrappers delegam para scripts externos do `talos-toolchain` e mantem este
-repositorio como camada de integracao.
+repositorio como camada de integracao. `cluster.sh` e `talos-gitops.sh` sao
+shims de compatibilidade depreciados para eles, mantidos apenas durante a
+janela de rollback.
 
 Exemplos:
 
@@ -116,10 +118,10 @@ Nota do comportamento atual:
 
 ## O Que Cada Script Faz De Fato
 
-### `cluster.sh`
+### `cluster-toolchain.sh`
 
-Entrypoint unificado que orquestra scripts existentes do modulo com actions
-explicitas:
+Entrypoint canonico que encaminha cada action para o `cluster.sh` do checkout
+`talos-toolchain`, com actions explicitas:
 
 - `create-project`
 - `generate`
@@ -130,7 +132,7 @@ explicitas:
 - `apply-post-bootstrap`
 - `sync-access`
 
-Ordem recomendada de execucao do `cluster.sh`:
+Ordem recomendada de execucao do `cluster-toolchain.sh`:
 
 0. `create-project`
 1. `generate`
@@ -141,28 +143,24 @@ Ordem recomendada de execucao do `cluster.sh`:
 6. `sync-access`
 7. `apply-post-bootstrap`
 
-`cluster.sh` e project-dir first:
+`cluster-toolchain.sh` e project-dir first:
 
 - Use `--project-dir=<path-do-projeto-cluster>` em operacao normal.
 - `--vars-file` continua disponivel para fluxos manuais/avancados.
-- `--env` foi removido do `cluster.sh`.
+- `--env` foi removido deste entrypoint.
 
-Contrato de mapeamento das actions day-1 nas vars do projeto:
+Nao ha mais indirecao local por command-hook: `cluster-toolchain.sh`
+encaminha cada action diretamente para a implementacao do proprio
+`talos-toolchain`. As variaveis `TALOS_DAY1_*` mapeadas por projeto nao sao
+lidas por nada no caminho de dispatch ativo deste repositorio — essa
+indirecao existia somente no `cluster.sh` local, que agora e um shim
+depreciado sem logica propria. Qualquer projeto que ainda defina essas
+variaveis (por exemplo `overlays/lab/talos/talos-smoke`) esta carregando
+configuracao legada inerte; veja o README desse projeto para o status atual.
 
-- `TALOS_DAY1_GENERATE_CMD`
-- `TALOS_DAY1_PROVISION_CMD`
-- `TALOS_DAY1_PREPARE_BOOTSTRAP_CMD`
-- `TALOS_DAY1_APPLY_CONFIG_CMD`
-- `TALOS_DAY1_BOOTSTRAP_CMD`
-- `TALOS_DAY1_SYNC_ACCESS_CMD`
-
-O `cluster.sh` executa esses mapeamentos diretamente para as actions do ciclo
-de vida Talos (`generate`, `provision`, `prepare-bootstrap`, `apply-config`,
-`bootstrap`, `sync-access`). Se algum mapeamento estiver ausente, a execucao
-falha de forma explicita.
-
-`apply-post-bootstrap` permanece como action separada e nao faz parte do
-conjunto mapeado do ciclo de vida Talos.
+`apply-post-bootstrap` permanece como action separada de primeira classe,
+despachada atraves do `cluster-toolchain.sh` como qualquer outra action
+acima.
 
 Exemplo:
 
@@ -292,8 +290,8 @@ KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig kubectl get nodes -w
 
 ## Fase 2: Network Bring-up (Extras Opcionais)
 
-Para extras opcionais neste repositorio, use `talos-gitops.sh` no fluxo day-2
-em vez de wrappers ad-hoc do day-1.
+Para extras opcionais neste repositorio, use `talos-gitops-toolchain.sh` no
+fluxo day-2 em vez de wrappers ad-hoc do day-1.
 
 ## Fase 3: Handoff GitOps
 

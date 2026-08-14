@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # @file talos-gitops-toolchain.sh
-# @brief Run day-2 actions using external talos-toolchain.
+# @brief Canonical day-2 entrypoint: run actions using external talos-toolchain.
 # @description
 #   Thin wrapper that forwards all arguments to talos-toolchain talos-gitops.sh.
-#   This allows migration testing without replacing the current local talos-gitops.sh.
+#   This is the active, canonical day-2 entrypoint for this repository;
+#   the local talos-gitops.sh is a deprecated compatibility shim for it.
 #
 # @arg action string Any action supported by toolchain talos-gitops.sh.
 # @arg options string Any options supported by toolchain talos-gitops.sh.
