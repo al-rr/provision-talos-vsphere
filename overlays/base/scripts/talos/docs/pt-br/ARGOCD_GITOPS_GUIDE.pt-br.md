@@ -29,7 +29,7 @@ Este guia gerencia os seguintes addons por recursos `Application` do Argo CD:
 Instale primeiro o Argo CD a partir da fonte de manifests GitOps:
 
 ```bash
-./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm \
   --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["argocd"]'
@@ -59,18 +59,18 @@ Exemplos:
 
 ```bash
 # Cenario 1: instalar conjunto amplo de plataforma (exclusoes de sistema continuam aplicadas)
-./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm \
   --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
 
 # Cenario 2: instalar apenas o que voce escolher
-./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm \
   --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["longhorn"]'
 
 # Cenario 2b: seletivo e com exclusao adicional nesta execucao
-./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm \
   --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["argocd","longhorn","cert-manager"]' \
@@ -97,7 +97,7 @@ kubectl apply -f /tmp/repo-secret.yaml
 Deploy do manifesto app-of-apps usando o entrypoint day-2:
 
 ```bash
-./overlays/base/scripts/talos/talos-gitops.sh deploy-argocd-root-app \
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh deploy-argocd-root-app \
   --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab
 ```

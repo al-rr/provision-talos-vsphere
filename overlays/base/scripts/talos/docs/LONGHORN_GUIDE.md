@@ -22,16 +22,16 @@ how to update values safely after initial deployment.
 - Helm overrides:
   - `overlays/lab/talos/talos/helm/longhorn/values.yaml`
 - Day-1 baseline orchestration:
-  - `overlays/base/scripts/talos/cluster.sh apply-post-bootstrap`
+  - `overlays/base/scripts/talos/cluster-toolchain.sh apply-post-bootstrap`
 - Day-2 GitOps orchestration:
-  - `overlays/base/scripts/talos/talos-gitops.sh install-platform-helm`
+  - `overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm`
 
 ## Install Or Upgrade Longhorn
 
 Day-1 baseline mode (from cluster project):
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh apply-post-bootstrap \
+./overlays/base/scripts/talos/cluster-toolchain.sh apply-post-bootstrap \
   --project-dir=overlays/lab/talos/talos \
   --addons='["longhorn"]'
 ```
@@ -39,7 +39,7 @@ Day-1 baseline mode (from cluster project):
 Day-2 GitOps mode (from manifest source):
 
 ```bash
-./overlays/base/scripts/talos/talos-gitops.sh install-platform-helm \
+./overlays/base/scripts/talos/talos-gitops-toolchain.sh install-platform-helm \
   --kube-context=admin@talos-dev \
   --manifest-root-dir=/home/vagrant/talos-vsphere-gitops/environments/lab \
   --addons='["longhorn"]'

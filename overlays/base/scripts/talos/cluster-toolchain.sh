@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # @file cluster-toolchain.sh
-# @brief Run day-1 actions using external talos-toolchain.
+# @brief Canonical day-1 entrypoint: run actions using external talos-toolchain.
 # @description
 #   Thin wrapper that forwards all arguments to talos-toolchain cluster.sh.
-#   This allows migration testing without replacing the current local cluster.sh.
+#   This is the active, canonical day-1 entrypoint for this repository;
+#   the local cluster.sh is a deprecated compatibility shim for it.
 #
 # @arg action string Any action supported by toolchain cluster.sh.
 # @arg options string Any options supported by toolchain cluster.sh.
@@ -68,7 +69,17 @@ patch_project_vars_for_lab_defaults() {
   [[ -f "${vars_file}" ]] || return 0
 
   if ! grep -q '^LAB_REPO_ROOT=' "${vars_file}"; then
-    sed -i '/^PROJECT_DIR=/a LAB_REPO_ROOT="$(cd "${PROJECT_DIR}/../../../.." \&\& pwd)"\nWORKSPACE_ROOT="$(dirname "${LAB_REPO_ROOT}")"' "${vars_file}"
+    local tmp_file=""
+    tmp_file="$(mktemp)"
+    awk '
+      { print }
+      /^PROJECT_DIR=/ && !done {
+        print "LAB_REPO_ROOT=\"$(cd \"${PROJECT_DIR}/../../../..\" && pwd)\""
+        print "WORKSPACE_ROOT=\"$(dirname \"${LAB_REPO_ROOT}\")\""
+        done=1
+      }
+    ' "${vars_file}" > "${tmp_file}"
+    mv "${tmp_file}" "${vars_file}"
   fi
 
   upsert_export_var "${vars_file}" "VSPHERE_ENDPOINT" "192.168.0.233"

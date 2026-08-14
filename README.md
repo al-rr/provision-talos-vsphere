@@ -90,7 +90,7 @@ VIP automation gap is closed.
 Current active path (govc, invoked through the day-1 `cluster.sh` lifecycle):
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh provision --project-dir=<project-dir>
+./overlays/base/scripts/talos/cluster-toolchain.sh provision --project-dir=<project-dir>
 ```
 
 Target/future path (Terraform, not yet wired into the day-1 flow):

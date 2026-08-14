@@ -11,15 +11,16 @@ If you want a single canonical command flow for lab day-1, use:
 
 - [LAB_DAY1_RUNBOOK.md](/home/vagrant/talos-vsphere-lab/overlays/base/scripts/talos/docs/LAB_DAY1_RUNBOOK.md)
 
-## Execution Entry Points (Transition)
+## Execution Entry Points (Canonical)
 
-Current recommendation during toolchain migration:
+Active canonical entrypoints:
 
 - Day-1: use `cluster-toolchain.sh`
 - Day-2: use `talos-gitops-toolchain.sh`
 
 Those wrappers delegate to external `talos-toolchain` scripts and keep this
-repository as the integration layer.
+repository as the integration layer. `cluster.sh` and `talos-gitops.sh` are
+deprecated compatibility shims for them, kept only for the rollback window.
 
 Examples:
 
@@ -108,10 +109,10 @@ Current behavior note:
 
 ## What Each Script Actually Does
 
-### `cluster.sh`
+### `cluster-toolchain.sh`
 
-Unified entrypoint that orchestrates existing module scripts with explicit
-actions:
+Canonical entrypoint that forwards every action to the `talos-toolchain`
+checkout's `cluster.sh`, with explicit actions:
 
 - `create-project`
 - `generate`
@@ -122,7 +123,7 @@ actions:
 - `apply-post-bootstrap`
 - `sync-access`
 
-Recommended `cluster.sh` execution order:
+Recommended `cluster-toolchain.sh` execution order:
 
 0. `create-project`
 1. `generate`
@@ -133,33 +134,29 @@ Recommended `cluster.sh` execution order:
 6. `sync-access`
 7. `apply-post-bootstrap`
 
-`cluster.sh` is project-dir first:
+`cluster-toolchain.sh` is project-dir first:
 
 - Use `--project-dir=<path-to-cluster-project>` in normal operation.
 - `--vars-file` remains available for manual/advanced flows.
-- `--env` is removed from `cluster.sh`.
+- `--env` is removed from this entrypoint.
 
-Day-1 action mapping contract in project vars:
+There is no local command-hook indirection: `cluster-toolchain.sh` forwards
+every action straight to `talos-toolchain`'s own implementation. Per-project
+`TALOS_DAY1_*` mapped-command variables are not read by anything in this
+repository's active dispatch path — that indirection existed only in the
+local `cluster.sh`, which is now a deprecated shim with no logic of its own.
+Any project still setting those variables (for example
+`overlays/lab/talos/talos-smoke`) is carrying inert legacy configuration; see
+that project's own README for the current status.
 
-- `TALOS_DAY1_GENERATE_CMD`
-- `TALOS_DAY1_PROVISION_CMD`
-- `TALOS_DAY1_PREPARE_BOOTSTRAP_CMD`
-- `TALOS_DAY1_APPLY_CONFIG_CMD`
-- `TALOS_DAY1_BOOTSTRAP_CMD`
-- `TALOS_DAY1_SYNC_ACCESS_CMD`
-
-`cluster.sh` executes these mappings directly for Talos lifecycle actions
-(`generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`,
-`sync-access`). If a mapping is missing, execution fails explicitly.
-
-`apply-post-bootstrap` remains a separate action and is not part of the mapped
-Talos lifecycle command set.
+`apply-post-bootstrap` remains a separate, first-class action, dispatched
+through `cluster-toolchain.sh` like every other action above.
 
 Example:
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh create-project --project-dir=overlays/lab/talos/talos-dev
-./overlays/base/scripts/talos/cluster.sh generate --project-dir=overlays/lab/talos/talos-dev
+./overlays/base/scripts/talos/cluster-toolchain.sh create-project --project-dir=overlays/lab/talos/talos-dev
+./overlays/base/scripts/talos/cluster-toolchain.sh generate --project-dir=overlays/lab/talos/talos-dev
 ```
 
 ### `phase-cluster-ready.sh`
@@ -249,13 +246,13 @@ Optional baseline extension:
 Command:
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos
+./overlays/base/scripts/talos/cluster-toolchain.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos
 ```
 
 With explicit list:
 
 ```bash
-./overlays/base/scripts/talos/cluster.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos --addons='["cilium","longhorn"]'
+./overlays/base/scripts/talos/cluster-toolchain.sh apply-post-bootstrap --project-dir=overlays/lab/talos/talos --addons='["cilium","longhorn"]'
 ```
 
 Important:
@@ -276,8 +273,8 @@ KUBECONFIG=overlays/lab/talos/talos/generated/kubeconfig kubectl get nodes -w
 
 ## Phase 2: Network Bring-up (Optional Extras)
 
-For optional extras in this repository, use `talos-gitops.sh` in day-2 flow
-instead of applying ad-hoc wrappers from day-1.
+For optional extras in this repository, use `talos-gitops-toolchain.sh` in
+day-2 flow instead of applying ad-hoc wrappers from day-1.
 
 ## Phase 3: GitOps Handoff
 

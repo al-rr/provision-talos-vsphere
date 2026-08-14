@@ -2,7 +2,10 @@
 # Copy to vars.local.sh and customize local/sensitive values.
 set -euo pipefail
 
-# Day-1 command mapping overrides (optional; defaults come from vars.sh)
+# Day-1 command mapping overrides — legacy, not read by any active dispatch
+# path since Iteration 10 (cluster.sh is now a pure shim to
+# cluster-toolchain.sh with no command-hook indirection). Kept commented-out
+# for historical reference only.
 # export TALOS_DAY1_GENERATE_CMD="..."
 # export TALOS_DAY1_PROVISION_CMD="..."
 # export TALOS_DAY1_PREPARE_BOOTSTRAP_CMD="..."
