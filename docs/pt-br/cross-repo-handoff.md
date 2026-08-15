@@ -29,7 +29,7 @@ Instale as ferramentas do fluxo escolhido (`bash`, `git`, `talosctl`, `kubectl`,
 
 1. No checkout do laboratorio, copie `vars.local.example.sh` para `vars.local.sh` no projeto escolhido (`talos-dev` ou `talos-smoke`) e informe credenciais, topologia e endpoints locais. Nunca versione esse arquivo.
 2. Revise `vars.sh`, patches e schematics rastreados; os caminhos relativos ao projeto/workspace sao derivados da localizacao do checkout.
-3. Execute o ciclo day-1 com `cluster.sh` (copia local de compatibilidade transitoria) ou com o wrapper `cluster-toolchain.sh`, que encaminha para o `cluster.sh` canonico do `talos-toolchain`: `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap` e `sync-access`. O comportamento generico do ciclo de vida Talos e responsabilidade do `talos-toolchain`; prefira `cluster-toolchain.sh` para trabalho novo.
+3. Execute o ciclo day-1 com `cluster-toolchain.sh`, o entrypoint canonico que encaminha para o `cluster.sh` do `talos-toolchain`: `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap` e `sync-access`. O `cluster.sh` local deste repositorio e um shim de encaminhamento descontinuado, mantido apenas para chamadores ainda nao migrados. O comportamento generico do ciclo de vida Talos e responsabilidade do `talos-toolchain`.
 4. Aplique o baseline pos-bootstrap somente depois de validar o acesso ao cluster. Ele le os manifests de plataforma do checkout GitOps irmao.
 5. Use Argo CD e o repositorio GitOps para mudancas day-2 de aplicacoes.
 
@@ -37,13 +37,12 @@ Instale as ferramentas do fluxo escolhido (`bash`, `git`, `talosctl`, `kubectl`,
 
 Este repositorio e o adaptador de infraestrutura VMware/vSphere: provisionamento
 via `govc`/Terraform, HAProxy e topologia de ambiente. O ciclo de vida Talos
-generico e independente de ambiente e responsabilidade do `talos-toolchain`.
-A direcao planejada e que a iteracao day-1 local/macOS passe a rodar em um
-backend local de primeira classe no `talos-toolchain`; esse backend ainda nao
-esta implementado (previsto para uma iteracao futura do toolchain), portanto
-trate-o como alvo, nao como um caminho ja disponivel. O provisionamento real
-em vSphere/ESXi e a validacao de VIP neste repositorio ficam adiados para o
-marco Windows/VMware — nao trate os caminhos Terraform de HAProxy ou Talos
+generico e independente de ambiente e responsabilidade do `talos-toolchain`,
+que ja disponibiliza um backend local Docker/Colima para Talos
+(`scripts/talos/local-cluster.sh`); esse backend e um caminho local separado
+e nao substitui o adaptador VMware/vSphere deste repositorio. O provisionamento
+real em vSphere/ESXi e a validacao de VIP neste repositorio ficam adiados para
+o marco Windows/VMware — nao trate os caminhos Terraform de HAProxy ou Talos
 como ativos ate que esse marco os conecte.
 
 ## Validacao e Lacunas Conhecidas
