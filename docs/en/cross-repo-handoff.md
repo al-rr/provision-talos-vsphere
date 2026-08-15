@@ -29,7 +29,7 @@ Install the tools required by the selected workflow (`bash`, `git`, `talosctl`, 
 
 1. In the lab checkout, copy `vars.local.example.sh` to `vars.local.sh` for the selected project (`talos-dev` or `talos-smoke`) and supply host-specific credentials, topology, and endpoints. Never commit this file.
 2. Review the tracked `vars.sh`, patches, and schematics; all project-relative paths derive from the project/workspace location.
-3. Run the day-1 lifecycle with `cluster.sh` (local, transitional compatibility copy) or the wrapper `cluster-toolchain.sh`, which forwards to the canonical `talos-toolchain` `cluster.sh`: `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`, and `sync-access`. Generic Talos lifecycle behavior is owned by `talos-toolchain`; prefer `cluster-toolchain.sh` for new work.
+3. Run the day-1 lifecycle with `cluster-toolchain.sh`, the canonical entrypoint that forwards to `talos-toolchain`'s `cluster.sh`: `generate`, `provision`, `prepare-bootstrap`, `apply-config`, `bootstrap`, and `sync-access`. The local `cluster.sh` in this repository is a deprecated forwarding shim kept only for callers not yet migrated. Generic Talos lifecycle behavior is owned by `talos-toolchain`.
 4. Apply the post-bootstrap baseline only after cluster access works. It reads platform manifests from the sibling GitOps checkout.
 5. Use Argo CD and the GitOps repository for day-2 application changes.
 
@@ -37,13 +37,12 @@ Install the tools required by the selected workflow (`bash`, `git`, `talosctl`, 
 
 This repository is the VMware/vSphere infrastructure adapter: `govc`/Terraform
 provisioning, HAProxy, and environment topology. Generic, environment-agnostic
-Talos lifecycle work belongs to `talos-toolchain`. The planned direction is
-for local/macOS day-1 iteration to run through a first-class local backend in
-`talos-toolchain`; that backend is not implemented yet (tracked as a later
-toolchain iteration), so treat it as the target, not a currently available
-path. Real vSphere/ESXi provisioning and VIP validation here are deferred to
-the Windows/VMware milestone — do not treat the Terraform paths for HAProxy
-or Talos as active until that milestone wires them in.
+Talos lifecycle work belongs to `talos-toolchain`, which already provides a
+local Docker/Colima Talos backend (`scripts/talos/local-cluster.sh`); that
+backend is a separate local-first path and does not replace this repository's
+VMware/vSphere adapter. Real vSphere/ESXi provisioning and VIP validation here
+are deferred to the Windows/VMware milestone — do not treat the Terraform
+paths for HAProxy or Talos as active until that milestone wires them in.
 
 ## Validation and Known Gaps
 

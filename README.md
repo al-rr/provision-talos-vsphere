@@ -10,10 +10,9 @@ overrides and bootstrap assets.
 - This repository is the VMware/vSphere infrastructure adapter: it provisions
   the VMs and load-balancer layer that Talos and GitOps run on. Real
   provisioning and VIP validation are deferred to the Windows/VMware
-  milestone. The planned direction is for local/macOS Talos lifecycle work to
-  move to a first-class local backend in `talos-toolchain`; that backend is
-  not implemented yet (tracked as a later toolchain iteration), so this
-  repository is not a substitute local-first path in the meantime.
+  milestone. `talos-toolchain` already provides a local Docker/Colima Talos
+  backend (`scripts/talos/local-cluster.sh`); it is a separate local-first
+  path and does not replace this repository's VMware/vSphere adapter.
 - Validate the operating model on standalone ESXi first.
 - Keep the production path aligned with the same base automation.
 - Use `govc + Ansible` for the current HAProxy path; Terraform/Packer for
@@ -22,11 +21,12 @@ overrides and bootstrap assets.
   Terraform is the target provisioner and is not yet wired into the day-1
   flow. Keep `talosctl` outside Terraform state for secrets and generated
   machine configuration either way.
-- Generic Talos day-1/day-2 lifecycle is owned by `talos-toolchain`. The local
-  scripts under `overlays/base/scripts/talos/` (`cluster.sh`,
-  `talos-gitops.sh`, and related helpers) are transitional compatibility
-  copies pending migration; prefer `cluster-toolchain.sh`, which forwards to
-  `talos-toolchain`, for new work.
+- Generic Talos day-1/day-2 lifecycle is owned by `talos-toolchain`. The
+  canonical provisioner entrypoints are `cluster-toolchain.sh` and
+  `talos-gitops-toolchain.sh`, which forward to `talos-toolchain`'s
+  `cluster.sh` and `talos-gitops.sh`; the local same-name scripts under
+  `overlays/base/scripts/talos/` (`cluster.sh`, `talos-gitops.sh`) are
+  deprecated forwarding shims kept only for callers not yet migrated.
 
 ## Source Of Truth
 
