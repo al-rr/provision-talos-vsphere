@@ -6,7 +6,7 @@ This document is the durable execution context for a clean host and for automati
 
 - `talos-toolchain`: reusable day-1 and day-2 Talos command layer.
 - `talos-vsphere-gitops`: GitOps source of truth for platform manifests.
-- `talos-vsphere-lab`: integration repository for vSphere/ESXi topology, environment overlays, and validation scenarios.
+- `provision-talos-vsphere`: integration repository for vSphere/ESXi topology, environment overlays, and validation scenarios.
 - `infra-gitops`: owns Packer/image-build automation. Report its defects and improvements as issues in that repository; do not restore Packer code here.
 
 ## Clean Host Setup
@@ -19,11 +19,26 @@ mkdir -p "$WORKSPACE_ROOT"
 cd "$WORKSPACE_ROOT"
 git clone git@github.com:al-rr/talos-toolchain.git
 git clone git@github.com:ednillibanio/talos-vsphere-gitops.git
-git clone git@github.com:al-rr/provision-talos-vsphere.git talos-vsphere-lab
+git clone git@github.com:al-rr/provision-talos-vsphere.git
 export TALOS_TOOLCHAIN_DIR="$WORKSPACE_ROOT/talos-toolchain"
 ```
 
 Install the tools required by the selected workflow (`bash`, `git`, `talosctl`, `kubectl`, `govc`, Terraform, and the lab controller dependencies). Use Git Bash on the Windows operator host when following the lab repository policy.
+
+Before starting the day-1 wrapper, confirm that the sibling checkout is the
+expected toolchain and that the wrapper can reach it. Run these read-only
+checks from the `provision-talos-vsphere` checkout:
+
+```bash
+test -x "$TALOS_TOOLCHAIN_DIR/scripts/talos/cluster.sh"
+./overlays/base/scripts/talos/cluster-toolchain.sh --help
+```
+
+`cluster-toolchain.sh` is a forwarding wrapper: it does not make this
+repository the owner of generic Talos lifecycle code. Use `--project-dir` to
+select the intended cluster project; do not pass credentials on the command
+line. The project and XDG environment configuration determine the non-secret
+intent and local credentials consumed by the underlying toolchain.
 
 ## Configuration and Execution Order
 
@@ -65,5 +80,7 @@ paths for HAProxy or Talos as active until that milestone wires them in.
 
 - Read this document, `agenda.md`, and `docs/devops/platform-automation-architecture.md` first.
 - Check all three repositories with `git status --short --branch` before work.
-- Create focused PRs against each repository's `main`; merge only after the relevant local and required remote checks succeed.
+- Create focused task branches from `lab` and target every ordinary PR at
+  `lab`; promotion to `main` is a separate owner-authorized operation. Merge
+  only after the relevant local and required remote checks succeed.
 - Record newly discovered image-build work in `infra-gitops` as an issue.

@@ -6,7 +6,7 @@ Este documento e o contexto duravel de execucao para um host limpo e para agente
 
 - `talos-toolchain`: camada reutilizavel de comandos Talos de day-1 e day-2.
 - `talos-vsphere-gitops`: fonte GitOps dos manifests da plataforma.
-- `talos-vsphere-lab`: integracao de topologia vSphere/ESXi, overlays de ambiente e cenarios de validacao.
+- `provision-talos-vsphere`: integracao de topologia vSphere/ESXi, overlays de ambiente e cenarios de validacao.
 - `infra-gitops`: responsavel pela automacao de Packer/imagens. Registre bugs e melhorias desse escopo como issues naquele repositorio; nao restaure o codigo Packer aqui.
 
 ## Preparacao em Host Limpo
@@ -19,11 +19,27 @@ mkdir -p "$WORKSPACE_ROOT"
 cd "$WORKSPACE_ROOT"
 git clone git@github.com:al-rr/talos-toolchain.git
 git clone git@github.com:ednillibanio/talos-vsphere-gitops.git
-git clone git@github.com:al-rr/provision-talos-vsphere.git talos-vsphere-lab
+git clone git@github.com:al-rr/provision-talos-vsphere.git
 export TALOS_TOOLCHAIN_DIR="$WORKSPACE_ROOT/talos-toolchain"
 ```
 
 Instale as ferramentas do fluxo escolhido (`bash`, `git`, `talosctl`, `kubectl`, `govc`, Terraform e dependencias do controlador de laboratorio). Use Git Bash no host operador Windows conforme a politica do laboratorio.
+
+Antes de iniciar o wrapper day-1, confirme que o checkout irmao e o toolchain
+esperado e que o wrapper consegue acessa-lo. Execute estas verificacoes somente
+de leitura a partir do checkout `provision-talos-vsphere`:
+
+```bash
+test -x "$TALOS_TOOLCHAIN_DIR/scripts/talos/cluster.sh"
+./overlays/base/scripts/talos/cluster-toolchain.sh --help
+```
+
+`cluster-toolchain.sh` e um wrapper de encaminhamento: ele nao torna este
+repositorio responsavel pelo codigo generico do ciclo de vida Talos. Use
+`--project-dir` para selecionar o projeto de cluster pretendido; nao passe
+credenciais na linha de comando. A configuracao do projeto e do ambiente XDG
+determina a intencao nao secreta e as credenciais locais consumidas pelo
+toolchain subjacente.
 
 ## Configuracao e Ordem de Execucao
 
@@ -68,5 +84,8 @@ como ativos ate que esse marco os conecte.
 
 - Leia este documento, `agenda.md` e `docs/devops/platform-automation-architecture.md` antes de agir.
 - Verifique os tres repositorios com `git status --short --branch` antes do trabalho.
-- Crie PRs focadas para `main` em cada repositorio; faca merge somente depois dos checks locais e remotos aplicaveis.
+- Crie branches de tarefa focadas a partir de `lab` e direcione toda PR comum
+  para `lab`; a promocao para `main` e uma operacao separada, autorizada pelo
+  proprietario. Faca merge somente depois dos checks locais e remotos
+  aplicaveis.
 - Registre trabalho novo de image build como issue em `infra-gitops`.
